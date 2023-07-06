@@ -32,7 +32,7 @@ impl Cpu {
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
-            0x4020..=0xFFFF => self.rom.read(addr - 0x4020),
+            0x4020..=0xFFFF => self.rom.read8(addr - 0x4020),
         }
     }
 
@@ -40,6 +40,26 @@ impl Cpu {
         let l = self.read_memory(addr);
         let r = self.read_memory(addr + 1);
         (r as u16) << 8 + (l as u16)
+    }
+
+    fn write_memory(&mut self, addr: u16, val: u8) {
+        match addr {
+            0x0000..=0x1FFF => {
+                self.ram[addr as usize % 0x800] = val;
+            }
+            0x2000..=0x3FFF => {
+                self.ppu_registers[(addr as usize - 0x2000) % 0x8] = val;
+            }
+            0x4000..=0x4017 => {
+                self.apu_registers[addr as usize - 0x4000] = val;
+            }
+            0x4018..=0x401F => {
+                unimplemented!("APU and I/O functionality that is normally disabled.")
+            }
+            0x4020..=0xFFFF => {
+                self.rom.write8(addr - 0x4020, val);
+            }
+        }
     }
 
     fn init(&mut self) {
@@ -85,11 +105,42 @@ impl Cpu {
         v
     }
 
+    fn fetch16(&mut self) -> u16 {
+        let v = self.read_memory_16(self.pc);
+        self.pc += 2;
+        v
+    }
+
+    fn addr_absolute(&mut self) -> u16 {
+        self.fetch16()
+    }
+
+    fn addr_indirect(&mut self) -> u16 {
+        let m = self.fetch16();
+        self.read_memory_16(m)
+    }
+
     fn cycle(&mut self) {
         let opcode = self.fetch8();
 
         match opcode {
-            0x69 => {}
+            0x69 => {
+                let m = self.fetch8();
+                self.op_adc(m);
+                panic!()
+            }
+
+            0x4c => {
+                let m = self.addr_absolute();
+                // TODO: Fix NB
+                self.pc = m;
+            }
+
+            0x6c => {
+                let m = self.addr_indirect();
+                // TODO: Fix NB
+                self.pc = m;
+            }
             _ => todo!(),
         }
     }
