@@ -111,36 +111,115 @@ impl Cpu {
         v
     }
 
-    fn addr_absolute(&mut self) -> u16 {
-        self.fetch16()
+    fn a_imm(&mut self) -> u8 {
+        self.fetch8()
     }
 
-    fn addr_indirect(&mut self) -> u16 {
+    fn a_zp(&mut self) -> u8 {
+        let m = self.fetch8() as u16;
+        self.read_memory(m)
+    }
+
+    fn a_zpx(&mut self) -> u8 {
+        let m = self.fetch8().wrapping_add(self.x) as u16;
+        self.read_memory(m)
+    }
+
+    fn a_zpy(&mut self) -> u8 {
+        let m = self.fetch8().wrapping_add(self.y) as u16;
+        self.read_memory(m)
+    }
+
+    fn a_rel(&mut self) -> i8 {
+        let m = self.fetch8() as u16;
+        self.read_memory(m) as i8
+    }
+
+    fn a_abs(&mut self) -> u8 {
+        let m = self.fetch16();
+        self.read_memory(m)
+    }
+
+    fn a_absx(&mut self) -> (u8, bool) {
+        let m = self.fetch16().wrapping_add(self.x as u16);
+        let pc = m > 255;
+        let v = self.read_memory(m);
+        (v, pc)
+    }
+
+    fn a_absy(&mut self) -> (u8, bool) {
+        let m = self.fetch16().wrapping_add(self.y as u16);
+        let pc = m > 255;
+        let v = self.read_memory(m);
+        (v, pc)
+    }
+
+    fn a_ind(&mut self) -> u16 {
         let m = self.fetch16();
         self.read_memory_16(m)
     }
 
-    fn cycle(&mut self) {
+    fn a_indx(&mut self) -> u8 {
+        let m = self.fetch8().wrapping_add(self.x);
+        self.read_memory(m as u16)
+    }
+
+    fn a_indy(&mut self) -> (u8, bool) {
+        let m = self.fetch8();
+        let m = self.read_memory(m as u16);
+        let m = u16::from_le_bytes([m, self.y]);
+        let pc = m > 255;
+        (self.read_memory(m), pc)
+    }
+
+    fn cycle(&mut self) -> u32 {
         let opcode = self.fetch8();
 
         match opcode {
+            // ADC
             0x69 => {
-                let m = self.fetch8();
+                let m = self.a_imm();
                 self.op_adc(m);
-                panic!()
+                2
+            }
+            0x65 => {
+                let m = self.a_zp();
+                self.op_adc(m);
+                3
+            }
+            0x75 => {
+                let m = self.a_zpx();
+                self.op_adc(m);
+                4
+            }
+            0x6D => {
+                let m = self.a_abs();
+                self.op_adc(m);
+                4
+            }
+            0x7D => {
+                let (m, pc) = self.a_absx();
+                self.op_adc(m);
+                4 + if pc { 1 } else { 0 }
+            }
+            0x79 => {
+                let (m, pc) = self.a_absy();
+                self.op_adc(m);
+                4 + if pc { 1 } else { 0 }
+            }
+            0x61 => {
+                let m = self.a_indx();
+                self.op_adc(m);
+                6
+            }
+            0x71 => {
+                let (m, pc) = self.a_indy();
+                self.op_adc(m);
+                5 + if pc { 1 } else { 0 }
             }
 
-            0x4c => {
-                let m = self.addr_absolute();
-                // TODO: Fix NB
-                self.pc = m;
-            }
+            // AND
 
-            0x6c => {
-                let m = self.addr_indirect();
-                // TODO: Fix NB
-                self.pc = m;
-            }
             _ => todo!(),
         }
     }
