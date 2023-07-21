@@ -1,6 +1,6 @@
 use crate::{cpu::Cpu, rom::Rom};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 struct LogLine {
     op: String,
     pc: u16,
@@ -38,20 +38,27 @@ fn run_nestest() {
     let mut cpu = Cpu::new(Rom::read_ines1_0("../roms/nestest/nestest.nes"));
     cpu.pc = 0xC000;
 
-    let mut cycles = 0;
+    let mut cycles = 7;
 
-    for line in &log {
-        assert_eq!(cpu.pc, line.pc);
+    for (i, line) in log.iter().enumerate() {
+        let created_line = &LogLine {
+            op: line.op.clone(),
+            pc: cpu.pc,
+            a: cpu.a,
+            x: cpu.x,
+            y: cpu.y,
+            p: cpu.p,
+            s: cpu.sp,
+            cyc: cycles,
+        };
 
         cycles += cpu.cycle();
 
-        assert_eq!(cpu.pc, line.pc);
-        assert_eq!(cpu.a, line.a);
-        assert_eq!(cpu.x, line.x);
-        assert_eq!(cpu.y, line.y);
-        assert_eq!(cpu.p, line.p);
-        assert_eq!(cpu.s, line.s);
-        assert_eq!(cycles, line.cyc);
+        assert_eq!(
+            line, created_line,
+            "Expected {:?} but got {:?} at instruction {}",
+            line, created_line, i
+        );
     }
 
     println!("{:?}", log);

@@ -5,7 +5,7 @@ pub struct Cpu {
     pub x: u8,
     pub y: u8,
     pub pc: u16,
-    pub s: u8,
+    pub sp: u8,
     pub p: u8,
 
     pub ram: [u8; 0x800],
@@ -39,7 +39,7 @@ impl Cpu {
     fn read_memory_16(&self, addr: u16) -> u16 {
         let l = self.read_memory(addr);
         let r = self.read_memory(addr + 1);
-        (r as u16) << 8 + (l as u16)
+        u16::from_le_bytes([l, r])
     }
 
     fn write_memory(&mut self, addr: u16, val: u8) {
@@ -67,12 +67,8 @@ impl Cpu {
         self.pc = start_addr;
     }
 
-    fn stack_ptr(&self) -> u16 {
-        self.s as u16 + 0x0100
-    }
-
     pub fn reset(&mut self) {
-        self.s = self.s.wrapping_sub(3);
+        self.sp = self.sp.wrapping_sub(3);
         self.p |= FLAG_INTERRUPT_DISABLE;
         self.apu_registers[0x15] = 0x00;
         // TODO: APU triangle phase is reset to 0
@@ -88,8 +84,8 @@ impl Cpu {
             x: 0,
             y: 0,
             pc: 0,
-            s: 0xFD,
-            p: 0x34,
+            sp: 0xFD,
+            p: 0x24,
 
             ram: [0x00; 0x800],
             ppu_registers: [0x00; 0x8],
@@ -144,16 +140,16 @@ impl Cpu {
         self.read_memory(m)
     }
 
-    fn a_absx(&mut self) -> (u8, bool) {
+    fn a_absx(&mut self) -> (u8, u32) {
         let m = self.fetch16().wrapping_add(self.x as u16);
-        let pc = m > 255;
+        let pc = if m > 255 { 1 } else { 0 };
         let v = self.read_memory(m);
         (v, pc)
     }
 
-    fn a_absy(&mut self) -> (u8, bool) {
+    fn a_absy(&mut self) -> (u8, u32) {
         let m = self.fetch16().wrapping_add(self.y as u16);
-        let pc = m > 255;
+        let pc = if m > 255 { 1 } else { 0 };
         let v = self.read_memory(m);
         (v, pc)
     }
@@ -168,11 +164,11 @@ impl Cpu {
         self.read_memory(m as u16)
     }
 
-    fn a_indy(&mut self) -> (u8, bool) {
+    fn a_indy(&mut self) -> (u8, u32) {
         let m = self.fetch8();
         let m = self.read_memory(m as u16);
         let m = u16::from_le_bytes([m, self.y]);
-        let pc = m > 255;
+        let pc = if m > 255 { 1 } else { 0 };
         (self.read_memory(m), pc)
     }
 
@@ -204,12 +200,12 @@ impl Cpu {
             0x7D => {
                 let (m, pc) = self.a_absx();
                 self.op_adc(m);
-                4 + if pc { 1 } else { 0 }
+                4 + pc
             }
             0x79 => {
                 let (m, pc) = self.a_absy();
                 self.op_adc(m);
-                4 + if pc { 1 } else { 0 }
+                4 + pc
             }
             0x61 => {
                 let m = self.a_indx();
@@ -219,11 +215,64 @@ impl Cpu {
             0x71 => {
                 let (m, pc) = self.a_indy();
                 self.op_adc(m);
-                5 + if pc { 1 } else { 0 }
+                5 + pc
             }
 
             // AND
+            0x29 => {
+                let m = self.a_imm();
+                self.op_and(m);
+                2
+            }
+            0x25 => {
+                let m = self.a_zp();
+                self.op_and(m);
+                3
+            }
+            0x35 => {
+                let m = self.a_zpx();
+                self.op_and(m);
+                4
+            }
+            0x2D => {
+                let m = self.a_abs();
+                self.op_and(m);
+                4
+            }
+            0x3D => {
+                let (m, pc) = self.a_absx();
+                self.op_and(m);
+                4 + pc
+            }
+            0x39 => {
+                let (m, pc) = self.a_absy();
+                self.op_and(m);
+                4 + pc
+            }
+            0x21 => {
+                let m = self.a_indx();
+                self.op_and(m);
+                6
+            }
+            0x31 => {
+                let (m, pc) = self.a_indy();
+                self.op_and(m);
+                5 + pc
+            }
 
+            // JMP
+            0x4C => {
+                let m = self.fetch16();
+                self.op_jmp(m);
+                3
+            }
+            0x6C => {
+                let m = self.a_ind();
+                self.op_jmp(m);
+                5
+            }
+
+            // AND
             _ => todo!("OPCODE {:#04x} not yet implemented", opcode),
         }
     }
@@ -267,13 +316,13 @@ impl Cpu {
     }
 
     fn push8(&mut self, v: u8) {
-        self.write_memory(self.stack_ptr(), v);
-        self.s = self.s.wrapping_add(1);
+        self.write_memory(0x0100 + self.sp as u16, v);
+        self.sp = self.sp.wrapping_add(1);
     }
 
     fn pop8(&mut self) -> u8 {
-        let v = self.read_memory(self.stack_ptr());
-        self.s = self.s.wrapping_sub(1);
+        let v = self.read_memory(0x0100 + self.sp as u16);
+        self.sp = self.sp.wrapping_sub(1);
         v
     }
 
@@ -564,7 +613,7 @@ impl Cpu {
     }
 
     fn op_tsx(&mut self) {
-        self.x = self.s;
+        self.x = self.sp;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
