@@ -1,6 +1,6 @@
 use crate::{cpu::Cpu, rom::Rom};
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 struct LogLine {
     op: String,
     pc: u16,
@@ -8,8 +8,22 @@ struct LogLine {
     x: u8,
     y: u8,
     p: u8,
-    s: u8,
+    sp: u8,
     cyc: u32,
+}
+
+impl std::fmt::Debug for LogLine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cpu")
+            .field("a", &format_args!("{:#04x}", self.a))
+            .field("x", &format_args!("{:#04x}", self.x))
+            .field("y", &format_args!("{:#04x}", self.y))
+            .field("pc", &format_args!("{:#06x}", self.pc))
+            .field("sp", &format_args!("{:#04x}", self.sp))
+            .field("p", &format_args!("{:#04x}", self.p))
+            .field("cyc", &self.cyc)
+            .finish()
+    }
 }
 
 fn parse_log(log: &str) -> Vec<LogLine> {
@@ -21,7 +35,7 @@ fn parse_log(log: &str) -> Vec<LogLine> {
             x: u8::from_str_radix(&line[55..57], 16).unwrap(),
             y: u8::from_str_radix(&line[60..62], 16).unwrap(),
             p: u8::from_str_radix(&line[65..67], 16).unwrap(),
-            s: u8::from_str_radix(&line[71..73], 16).unwrap(),
+            sp: u8::from_str_radix(&line[71..73], 16).unwrap(),
             cyc: line[90..].parse().unwrap(),
         })
         .collect()
@@ -48,17 +62,13 @@ fn run_nestest() {
             x: cpu.x,
             y: cpu.y,
             p: cpu.p,
-            s: cpu.sp,
+            sp: cpu.sp,
             cyc: cycles,
         };
 
         cycles += cpu.cycle();
 
-        assert_eq!(
-            line, created_line,
-            "Expected {:?} but got {:?} at instruction {}",
-            line, created_line, i
-        );
+        assert_eq!(line, created_line, "Line {}", i + 1);
     }
 
     println!("{:?}", log);

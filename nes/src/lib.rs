@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-mod nes;
 mod cpu;
+mod nes;
 mod rom;
 mod test;

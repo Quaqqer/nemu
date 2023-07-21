@@ -8,6 +8,8 @@ pub struct Cpu {
     pub sp: u8,
     pub p: u8,
 
+    pub page: u8,
+
     pub ram: [u8; 0x800],
     pub ppu_registers: [u8; 0x8],
     pub apu_registers: [u8; 0x18],
@@ -22,6 +24,20 @@ const FLAG_DECIMAL: u8 = 1 << 3;
 const FLAG_B: u8 = 0b11 << 4;
 const FLAG_OVERFLOW: u8 = 1 << 6;
 const FLAG_NEGATIVE: u8 = 1 << 7;
+
+impl std::fmt::Debug for Cpu {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Cpu")
+            .field("a", &format_args!("{:#04x}", self.a))
+            .field("x", &format_args!("{:#04x}", self.x))
+            .field("y", &format_args!("{:#04x}", self.y))
+            .field("pc", &format_args!("{:#06x}", self.pc))
+            .field("sp", &format_args!("{:#04x}", self.sp))
+            .field("p", &format_args!("{:#04x}", self.p))
+            .field("page", &self.page)
+            .finish()
+    }
+}
 
 impl Cpu {
     fn read_memory(&self, addr: u16) -> u8 {
@@ -86,6 +102,8 @@ impl Cpu {
             pc: 0,
             sp: 0xFD,
             p: 0x24,
+
+            page: 0,
 
             ram: [0x00; 0x800],
             ppu_registers: [0x00; 0x8],
@@ -260,6 +278,19 @@ impl Cpu {
                 5 + pc
             }
 
+            // BCS
+            0xB0 => {
+                let m = self.a_rel();
+                let success = self.op_bcs(m);
+                2 + if success { 1 } else { 0 }
+            }
+
+            // CLV
+            0xB8 => {
+                self.op_clv();
+                2
+            }
+
             // JMP
             0x4C => {
                 let m = self.fetch16();
@@ -272,7 +303,69 @@ impl Cpu {
                 5
             }
 
-            // AND
+            // JSR
+            0x20 => {
+                let m = self.fetch16();
+                self.op_jsr(m);
+                6
+            }
+
+            // LDX
+            0xA2 => {
+                let m = self.a_imm();
+                self.op_ldx(m);
+                2
+            }
+            0xA6 => {
+                let m = self.a_zp();
+                self.op_ldx(m);
+                3
+            }
+            0xB6 => {
+                let m = self.a_zpy();
+                self.op_ldx(m);
+                4
+            }
+            0xAE => {
+                let m = self.a_abs();
+                self.op_ldx(m);
+                4
+            }
+            0xBE => {
+                let (m, pc) = self.a_absy();
+                self.op_ldx(m);
+                4 + pc
+            }
+
+            // NOP
+            0xEA => {
+                self.op_nop();
+                2
+            }
+
+            // SEC
+            0x38 => {
+                self.op_sec();
+                2
+            }
+
+            // STX
+            0x86 => {
+                let m = self.a_zp();
+                self.op_stx(m as u16);
+                3
+            }
+            0x96 => {
+                let m = self.a_zpy();
+                self.op_stx(m as u16);
+                4
+            }
+            0x8E => {
+                let m = self.fetch16();
+                self.op_stx(m);
+                4
+            }
+
             _ => todo!("OPCODE {:#04x} not yet implemented", opcode),
         }
     }
@@ -317,12 +410,12 @@ impl Cpu {
 
     fn push8(&mut self, v: u8) {
         self.write_memory(0x0100 + self.sp as u16, v);
-        self.sp = self.sp.wrapping_add(1);
+        self.sp = self.sp.wrapping_sub(1);
     }
 
     fn pop8(&mut self) -> u8 {
         let v = self.read_memory(0x0100 + self.sp as u16);
-        self.sp = self.sp.wrapping_sub(1);
+        self.sp = self.sp.wrapping_add(1);
         v
     }
 
@@ -370,9 +463,12 @@ impl Cpu {
         }
     }
 
-    fn op_bcs(&mut self, d: i8) {
+    fn op_bcs(&mut self, d: i8) -> bool {
         if self.get_flag(FLAG_CARRY) {
             self.relative_jump(d);
+            true
+        } else {
+            false
         }
     }
 
@@ -508,16 +604,16 @@ impl Cpu {
         self.update_negative(self.a);
     }
 
-    fn op_ldx(&mut self) {
-        self.a = self.x;
-        self.update_zero(self.a);
-        self.update_negative(self.a);
+    fn op_ldx(&mut self, v: u8) {
+        self.x = v;
+        self.update_zero(self.x);
+        self.update_negative(self.x);
     }
 
-    fn op_ldy(&mut self) {
-        self.a = self.y;
-        self.update_zero(self.a);
-        self.update_negative(self.a);
+    fn op_ldy(&mut self, v: u8) {
+        self.y = v;
+        self.update_zero(self.y);
+        self.update_negative(self.y);
     }
 
     fn op_lsr(&mut self, v: Option<u8>) {
