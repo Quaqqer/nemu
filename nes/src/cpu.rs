@@ -149,8 +149,7 @@ impl Cpu {
     }
 
     fn a_rel(&mut self) -> i8 {
-        let m = self.fetch8() as u16;
-        self.read_memory(m) as i8
+        self.fetch8() as i8
     }
 
     fn a_abs(&mut self) -> u8 {
@@ -278,11 +277,24 @@ impl Cpu {
                 5 + pc
             }
 
+            // BCC
+            0x90 => {
+                let m = self.a_rel();
+                let success = self.op_bcc(m);
+                2 + if success { 1 } else { 0 }
+            }
+
             // BCS
             0xB0 => {
                 let m = self.a_rel();
                 let success = self.op_bcs(m);
                 2 + if success { 1 } else { 0 }
+            }
+
+            // CLC
+            0x18 => {
+                self.op_clc();
+                2
             }
 
             // CLV
@@ -308,6 +320,48 @@ impl Cpu {
                 let m = self.fetch16();
                 self.op_jsr(m);
                 6
+            }
+
+            // LDA
+            0xA9 => {
+                let m = self.a_imm();
+                self.op_lda(m);
+                2
+            }
+            0xA5 => {
+                let m = self.a_zp();
+                self.op_lda(m);
+                3
+            }
+            0xB5 => {
+                let m = self.a_zpx();
+                self.op_lda(m);
+                4
+            }
+            0xAD => {
+                let m = self.a_abs();
+                self.op_lda(m);
+                4
+            }
+            0xBD => {
+                let (m, pc) = self.a_absx();
+                self.op_lda(m);
+                4 + pc
+            }
+            0xB9 => {
+                let (m, pc) = self.a_absy();
+                self.op_lda(m);
+                4 + pc
+            }
+            0xA1 => {
+                let m = self.a_indx();
+                self.op_lda(m);
+                6
+            }
+            0xB1 => {
+                let (m, pc) = self.a_indy();
+                self.op_lda(m);
+                5 + pc
             }
 
             // LDX
@@ -457,9 +511,12 @@ impl Cpu {
         self.update_negative(self.a);
     }
 
-    fn op_bcc(&mut self, d: i8) {
+    fn op_bcc(&mut self, d: i8) -> bool {
         if !self.get_flag(FLAG_CARRY) {
             self.relative_jump(d);
+            true
+        } else {
+            false
         }
     }
 

@@ -1,8 +1,7 @@
 use crate::{cpu::Cpu, rom::Rom};
 
 #[derive(PartialEq)]
-struct LogLine {
-    op: String,
+struct LogEntry {
     pc: u16,
     a: u8,
     x: u8,
@@ -12,7 +11,7 @@ struct LogLine {
     cyc: u32,
 }
 
-impl std::fmt::Debug for LogLine {
+impl std::fmt::Debug for LogEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Cpu")
             .field("a", &format_args!("{:#04x}", self.a))
@@ -26,10 +25,10 @@ impl std::fmt::Debug for LogLine {
     }
 }
 
-fn parse_log(log: &str) -> Vec<LogLine> {
-    log.lines()
-        .map(|line| LogLine {
-            op: line[16..48].trim_end().to_string(),
+fn parse_log(lines: &Vec<String>) -> Vec<LogEntry> {
+    lines
+        .iter()
+        .map(|line| LogEntry {
             pc: u16::from_str_radix(&line[0..4], 16).unwrap(),
             a: u8::from_str_radix(&line[50..52], 16).unwrap(),
             x: u8::from_str_radix(&line[55..57], 16).unwrap(),
@@ -43,20 +42,19 @@ fn parse_log(log: &str) -> Vec<LogLine> {
 
 #[test]
 fn run_nestest() {
-    let log = parse_log(
-        std::fs::read_to_string("../roms/nestest/nestest.log")
-            .unwrap()
-            .as_str(),
-    );
+    let log_lines = std::fs::read_to_string("../roms/nestest/nestest.log")
+        .unwrap()
+        .lines()
+        .map(|s| s.to_string())
+        .collect::<Vec<String>>();
 
     let mut cpu = Cpu::new(Rom::read_ines1_0("../roms/nestest/nestest.nes"));
     cpu.pc = 0xC000;
 
     let mut cycles = 7;
 
-    for (i, line) in log.iter().enumerate() {
-        let created_line = &LogLine {
-            op: line.op.clone(),
+    for (i, expected) in parse_log(&log_lines).iter().enumerate() {
+        let got = &LogEntry {
             pc: cpu.pc,
             a: cpu.a,
             x: cpu.x,
@@ -68,10 +66,26 @@ fn run_nestest() {
 
         cycles += cpu.cycle();
 
-        assert_eq!(line, created_line, "Line {}", i + 1);
+        if expected != got {
+            let lines = ((i - 2).max(0)..(i + 3).min(log_lines.len()))
+                .map(|i| (i, &log_lines[i]))
+                .map(|(j, line)| {
+                    if j == i {
+                        "-> ".to_string() + &line
+                    } else {
+                        "   ".to_string() + &line
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n");
+
+            panic!(
+                "\nUnexpected cpu state on line {}:\n\tExpected: {:?}\n\tGot:      {:?}\n\nLines:\n{}\n",
+                i + 1,
+                expected,
+                got
+                ,lines
+            );
+        }
     }
-
-    println!("{:?}", log);
-
-    panic!()
 }
