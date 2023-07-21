@@ -61,7 +61,8 @@ impl Rom {
         ptr += prg_size;
 
         let chr = bin[ptr..ptr + chr_size].to_vec();
-        ptr += chr_size;
+        #[allow(unused_assignments)]
+        let _ = ptr += chr_size;
 
         Self {
             prg_pages,
@@ -77,10 +78,12 @@ impl Rom {
     }
 
     pub fn write8(&mut self, addr: u16, val: u8) {
-        self.mapper.write8(self, addr, val);
+        let mapper = self.mapper;
+        mapper.write8(self, addr, val);
     }
 }
 
+#[derive(Clone, Copy)]
 enum Mapper {
     NES1_0,
 }

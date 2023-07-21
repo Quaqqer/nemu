@@ -1,18 +1,18 @@
 use crate::rom::Rom;
 
 pub struct Cpu {
-    a: u8,
-    x: u8,
-    y: u8,
-    pc: u16,
-    s: u8,
-    p: u8,
+    pub a: u8,
+    pub x: u8,
+    pub y: u8,
+    pub pc: u16,
+    pub s: u8,
+    pub p: u8,
 
-    ram: [u8; 0x800],
-    ppu_registers: [u8; 0x8],
-    apu_registers: [u8; 0x18],
+    pub ram: [u8; 0x800],
+    pub ppu_registers: [u8; 0x8],
+    pub apu_registers: [u8; 0x18],
 
-    rom: Rom,
+    pub rom: Rom,
 }
 
 const FLAG_CARRY: u8 = 1 << 0;
@@ -32,7 +32,7 @@ impl Cpu {
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
-            0x4020..=0xFFFF => self.rom.read8(addr - 0x4020),
+            0x4020..=0xFFFF => self.rom.read8(addr),
         }
     }
 
@@ -79,11 +79,11 @@ impl Cpu {
         // TODO: APU DPCM output ANDed with 1 (upper 6 bits cleared)
     }
 
-    fn new(rom: Rom) -> Self {
+    pub fn new(rom: Rom) -> Self {
         // TODO: All 15 bits of noise channel LSFR = $0000
         // TODO: APU Frame Counter
 
-        Self {
+        let mut cpu = Self {
             a: 0,
             x: 0,
             y: 0,
@@ -96,7 +96,11 @@ impl Cpu {
             apu_registers: [0x00; 0x18],
 
             rom,
-        }
+        };
+
+        cpu.init();
+
+        cpu
     }
 
     fn fetch8(&mut self) -> u8 {
@@ -172,7 +176,7 @@ impl Cpu {
         (self.read_memory(m), pc)
     }
 
-    fn cycle(&mut self) -> u32 {
+    pub fn cycle(&mut self) -> u32 {
         let opcode = self.fetch8();
 
         match opcode {
@@ -220,7 +224,7 @@ impl Cpu {
 
             // AND
 
-            _ => todo!(),
+            _ => todo!("OPCODE {:#04x} not yet implemented", opcode),
         }
     }
 
