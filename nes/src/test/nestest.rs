@@ -51,8 +51,6 @@ fn run_nestest() {
     let mut cpu = Cpu::new(Rom::read_ines1_0("../roms/nestest/nestest.nes"));
     cpu.pc = 0xC000;
 
-    let mut cycles = 7;
-
     for (i, expected) in parse_log(&log_lines).iter().enumerate() {
         let got = &LogEntry {
             pc: cpu.pc,
@@ -61,16 +59,14 @@ fn run_nestest() {
             y: cpu.y,
             p: cpu.p,
             sp: cpu.sp,
-            cyc: cycles,
+            cyc: cpu.cyc + 7,
         };
 
-        cycles += cpu.cycle();
-
         if expected != got {
-            let lines = ((i - 2).max(0)..(i + 3).min(log_lines.len()))
-                .map(|i| (i, &log_lines[i]))
+            let lines = ((i as i32 - 2).max(0)..(i as i32 + 3).min(log_lines.len() as i32))
+                .map(|i| (i, &log_lines[i as usize]))
                 .map(|(j, line)| {
-                    if j == i {
+                    if j as usize == i {
                         "-> ".to_string() + &line
                     } else {
                         "   ".to_string() + &line
@@ -80,12 +76,15 @@ fn run_nestest() {
                 .join("\n");
 
             panic!(
-                "\nUnexpected cpu state on line {}:\n\tExpected: {:?}\n\tGot:      {:?}\n\nLines:\n{}\n",
+                "\nUnexpected cpu state on line {}:\n\tExpected: {:?}\n\tGot:      {:?}\n\nFull cpu state: {:?}\n\nLines:\n{}\n",
                 i + 1,
                 expected,
-                got
-                ,lines
+                got,
+                cpu,
+                lines,
             );
         }
+
+        cpu.cycle();
     }
 }
