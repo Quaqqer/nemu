@@ -798,7 +798,7 @@ impl Cpu {
                 self.cyc += 4;
             }
             0x0D => {
-                let a = self.a_zpy();
+                let a = self.a_abs();
                 self.op_ora(a);
                 self.cyc += 4;
             }
