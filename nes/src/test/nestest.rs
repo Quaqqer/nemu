@@ -59,11 +59,11 @@ fn run_nestest() {
             y: cpu.y,
             p: cpu.p,
             sp: cpu.sp,
-            cyc: cpu.cyc + 7,
+            cyc: cpu.cyc,
         };
 
         if expected != got {
-            let lines = ((i as i32 - 2).max(0)..(i as i32 + 3).min(log_lines.len() as i32))
+            let lines = ((i as i32 - 27).max(0)..(i as i32 + 3).min(log_lines.len() as i32))
                 .map(|i| (i, &log_lines[i as usize]))
                 .map(|(j, line)| {
                     if j as usize == i {

@@ -10,8 +10,6 @@ pub struct Cpu {
 
     pub cyc: u32,
 
-    pub page: u8,
-
     pub ram: [u8; 0x800],
     pub ppu_registers: [u8; 0x8],
     pub apu_registers: [u8; 0x18],
@@ -37,7 +35,7 @@ impl std::fmt::Debug for Cpu {
             .field("pc", &format_args!("{:#06x}", self.pc))
             .field("sp", &format_args!("{:#04x}", self.sp))
             .field("p", &format_args!("{:#04x}", self.p))
-            .field("page", &self.page)
+            .field("cyc", &self.cyc)
             .finish()
     }
 }
@@ -49,6 +47,8 @@ enum Addr {
     X,
     Y,
     Mem(u16),
+    /// Memory with page crossed
+    MemPC(u16),
     Rel(i8),
 }
 
@@ -67,7 +67,13 @@ impl Cpu {
 
     fn read_mem16(&self, addr: u16) -> u16 {
         let l = self.read_mem8(addr);
-        let r = self.read_mem8(addr + 1);
+        let r = self.read_mem8(addr.wrapping_add(1));
+        u16::from_le_bytes([l, r])
+    }
+
+    fn read_mem16_sp(&self, addr: u16) -> u16 {
+        let l = self.read_mem8(addr);
+        let r = self.read_mem8((addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
         u16::from_le_bytes([l, r])
     }
 
@@ -122,9 +128,7 @@ impl Cpu {
             sp: 0xFD,
             p: 0x24,
 
-            cyc: 0,
-
-            page: 0,
+            cyc: 7,
 
             ram: [0x00; 0x800],
             ppu_registers: [0x00; 0x8],
@@ -179,18 +183,30 @@ impl Cpu {
     }
 
     fn a_absx(&mut self) -> Addr {
-        let addr = self.fetch16().wrapping_add(self.x as u16);
-        Addr::Mem(addr)
+        let abs = self.fetch16();
+        let a = abs.wrapping_add(self.x as u16);
+
+        if a & 0xFF < abs & 0xFF {
+            Addr::MemPC(a)
+        } else {
+            Addr::Mem(a)
+        }
     }
 
     fn a_absy(&mut self) -> Addr {
-        let addr = self.fetch16().wrapping_add(self.y as u16);
-        Addr::Mem(addr)
+        let abs = self.fetch16();
+        let a = abs.wrapping_add(self.y as u16);
+
+        if a & 0xFF < abs & 0xFF {
+            Addr::MemPC(a)
+        } else {
+            Addr::Mem(a)
+        }
     }
 
     fn a_ind(&mut self) -> Addr {
         let a = self.fetch16();
-        let a = self.read_mem16(a);
+        let a = self.read_mem16_sp(a);
         Addr::Mem(a)
     }
 
@@ -205,20 +221,27 @@ impl Cpu {
 
     fn a_indy(&mut self) -> Addr {
         let a = self.fetch8() as u16;
-        let a = u16::from_le_bytes([
-            self.read_mem8(a as u16),
-            self.read_mem8(a.wrapping_add(1) as u16),
-        ]);
-        Addr::Mem(a)
+        let abs = u16::from_le_bytes([self.read_mem8(a), self.read_mem8(a.wrapping_add(1) & 0xFF)]);
+        let a = abs.wrapping_add(self.y as u16);
+
+        if a & 0xFF < abs & 0xFF {
+            Addr::MemPC(a)
+        } else {
+            Addr::Mem(a)
+        }
     }
 
-    fn read8(&self, addr: Addr) -> u8 {
+    fn read8(&mut self, addr: Addr) -> u8 {
         match addr {
             Addr::Val(x) => x,
             Addr::A => self.a,
             Addr::X => self.x,
             Addr::Y => self.y,
             Addr::Mem(a) => self.read_mem8(a),
+            Addr::MemPC(a) => {
+                self.cyc += 1;
+                self.read_mem8(a)
+            }
             Addr::Rel(_) => unreachable!(),
         }
     }
@@ -226,7 +249,9 @@ impl Cpu {
     fn read16(&self, addr: Addr) -> u16 {
         match addr {
             Addr::Mem(a) => self.read_mem16(a),
-            Addr::Val(_) | Addr::A | Addr::X | Addr::Y | Addr::Rel(_) => unreachable!(),
+            Addr::Val(_) | Addr::A | Addr::X | Addr::Y | Addr::Rel(_) | Addr::MemPC(_) => {
+                unreachable!()
+            }
         }
     }
 
@@ -241,7 +266,7 @@ impl Cpu {
             Addr::Y => {
                 self.y = v;
             }
-            Addr::Mem(a) => self.write_mem8(a, v),
+            Addr::Mem(a) | Addr::MemPC(a) => self.write_mem8(a, v),
             Addr::Val(_) | Addr::Rel(_) => unreachable!(),
         }
     }
@@ -364,22 +389,22 @@ impl Cpu {
             // BCC
             0x90 => {
                 let a = self.a_rel();
-                let delay = self.op_bcc(a);
-                self.cyc += 2 + delay;
+                self.op_bcc(a);
+                self.cyc += 2;
             }
 
             // BCS
             0xB0 => {
                 let a = self.a_rel();
-                let delay = self.op_bcs(a);
-                self.cyc += 2 + delay;
+                self.op_bcs(a);
+                self.cyc += 2;
             }
 
             // BEQ
             0xF0 => {
                 let a = self.a_rel();
-                let delay = self.op_beq(a);
-                self.cyc += 2 + delay;
+                self.op_beq(a);
+                self.cyc += 2;
             }
 
             // BIT
@@ -404,29 +429,29 @@ impl Cpu {
             // BNE
             0xD0 => {
                 let a = self.a_rel();
-                let delay = self.op_bne(a);
-                self.cyc += 2 + delay;
+                self.op_bne(a);
+                self.cyc += 2;
             }
 
             // BPL
             0x10 => {
                 let a = self.a_rel();
-                let delay = self.op_bpl(a);
-                self.cyc += 2 + delay;
+                self.op_bpl(a);
+                self.cyc += 2;
             }
 
             // BVC
             0x50 => {
                 let a = self.a_rel();
-                let delay = self.op_bvc(a);
-                self.cyc += 2 + delay;
+                self.op_bvc(a);
+                self.cyc += 2;
             }
 
             // BVS
             0x70 => {
                 let m = self.a_rel();
-                let delay = self.op_bvs(m);
-                self.cyc += 2 + delay;
+                self.op_bvs(m);
+                self.cyc += 2;
             }
 
             // CLC
@@ -896,7 +921,7 @@ impl Cpu {
                 self.cyc += 6;
             }
             0x7E => {
-                let a = self.a_abs();
+                let a = self.a_absx();
                 self.op_ror(a);
                 self.cyc += 7;
             }
@@ -1191,16 +1216,16 @@ impl Cpu {
         self.write8(a, new_v);
     }
 
-    fn op_bcc(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_CARRY))
+    fn op_bcc(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_CARRY));
     }
 
-    fn op_bcs(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_CARRY))
+    fn op_bcs(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_CARRY));
     }
 
-    fn op_beq(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_ZERO))
+    fn op_beq(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_ZERO));
     }
 
     fn op_bit(&mut self, a: Addr) {
@@ -1211,16 +1236,16 @@ impl Cpu {
         self.set_flag(FLAG_ZERO, v == 0);
     }
 
-    fn op_bmi(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_NEGATIVE))
+    fn op_bmi(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_NEGATIVE));
     }
 
-    fn op_bne(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_ZERO))
+    fn op_bne(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_ZERO));
     }
 
-    fn op_bpl(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_NEGATIVE))
+    fn op_bpl(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_NEGATIVE));
     }
 
     fn op_brk(&mut self) {
@@ -1230,12 +1255,12 @@ impl Cpu {
         self.pc = self.read_mem16(0xFFFE);
     }
 
-    fn op_bvc(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_OVERFLOW))
+    fn op_bvc(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_OVERFLOW));
     }
 
-    fn op_bvs(&mut self, a: Addr) -> u32 {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_OVERFLOW))
+    fn op_bvs(&mut self, a: Addr) {
+        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_OVERFLOW));
     }
 
     fn op_clc(&mut self) {
@@ -1255,15 +1280,18 @@ impl Cpu {
     }
 
     fn op_cmp(&mut self, a: Addr) {
-        self.compare(self.a, self.read8(a));
+        let v = self.read8(a);
+        self.compare(self.a, v);
     }
 
     fn op_cpx(&mut self, a: Addr) {
-        self.compare(self.x, self.read8(a));
+        let v = self.read8(a);
+        self.compare(self.x, v);
     }
 
     fn op_cpy(&mut self, a: Addr) {
-        self.compare(self.y, self.read8(a));
+        let v = self.read8(a);
+        self.compare(self.y, v);
     }
 
     fn op_dec(&mut self, a: Addr) {
@@ -1497,15 +1525,14 @@ impl Cpu {
         self.update_negative(self.a);
     }
 
-    fn generic_branch<F>(&mut self, addr: Addr, cond: F) -> u32
+    fn generic_branch<F>(&mut self, addr: Addr, cond: F)
     where
         F: FnOnce(&Cpu) -> bool,
     {
         if let Addr::Rel(d) = addr {
             if cond(self) {
-                self.relative_jump(d) + 1
-            } else {
-                0
+                self.cyc += 1;
+                self.cyc += self.relative_jump(d);
             }
         } else {
             unreachable!()
