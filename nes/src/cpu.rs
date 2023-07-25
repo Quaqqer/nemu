@@ -42,7 +42,7 @@ impl std::fmt::Debug for Cpu {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Addr {
     Val(u8),
     A,
@@ -150,6 +150,10 @@ impl Cpu {
         v
     }
 
+    fn a_acc(&mut self) -> Addr {
+        Addr::A
+    }
+
     fn a_imm(&mut self) -> Addr {
         Addr::Val(self.fetch8())
     }
@@ -191,14 +195,20 @@ impl Cpu {
     }
 
     fn a_indx(&mut self) -> Addr {
-        let a = self.fetch8().wrapping_add(self.x) as u16;
-        let a = self.read_mem16(a);
+        let a = self.fetch8().wrapping_add(self.x);
+        let a = u16::from_le_bytes([
+            self.read_mem8(a as u16),
+            self.read_mem8(a.wrapping_add(1) as u16),
+        ]);
         Addr::Mem(a)
     }
 
     fn a_indy(&mut self) -> Addr {
         let a = self.fetch8() as u16;
-        let a = self.read_mem16(a).wrapping_add(self.y as u16);
+        let a = u16::from_le_bytes([
+            self.read_mem8(a as u16),
+            self.read_mem8(a.wrapping_add(1) as u16),
+        ]);
         Addr::Mem(a)
     }
 
@@ -324,6 +334,33 @@ impl Cpu {
                 self.cyc += 5;
             }
 
+            // ASL
+            0x0A => {
+                let a = self.a_acc();
+                self.op_asl(a);
+                self.cyc += 2;
+            }
+            0x06 => {
+                let a = self.a_zp();
+                self.op_asl(a);
+                self.cyc += 5;
+            }
+            0x16 => {
+                let a = self.a_zpx();
+                self.op_asl(a);
+                self.cyc += 6;
+            }
+            0x0E => {
+                let a = self.a_abs();
+                self.op_asl(a);
+                self.cyc += 6;
+            }
+            0x1E => {
+                let a = self.a_absx();
+                self.op_asl(a);
+                self.cyc += 7;
+            }
+
             // BCC
             0x90 => {
                 let a = self.a_rel();
@@ -355,6 +392,13 @@ impl Cpu {
                 let a = self.a_abs();
                 self.op_bit(a);
                 self.cyc += 4;
+            }
+
+            // BMI
+            0x30 => {
+                let a = self.a_rel();
+                self.op_bmi(a);
+                self.cyc += 2;
             }
 
             // BNE
@@ -445,6 +489,150 @@ impl Cpu {
                 self.cyc += 5;
             }
 
+            // CPX
+            0xE0 => {
+                let a = self.a_imm();
+                self.op_cpx(a);
+                self.cyc += 2;
+            }
+            0xE4 => {
+                let a = self.a_zp();
+                self.op_cpx(a);
+                self.cyc += 3;
+            }
+            0xEC => {
+                let a = self.a_abs();
+                self.op_cpx(a);
+                self.cyc += 4;
+            }
+
+            // CPY
+            0xC0 => {
+                let a = self.a_imm();
+                self.op_cpy(a);
+                self.cyc += 2;
+            }
+            0xC4 => {
+                let a = self.a_zp();
+                self.op_cpy(a);
+                self.cyc += 3;
+            }
+            0xCC => {
+                let a = self.a_abs();
+                self.op_cpy(a);
+                self.cyc += 4;
+            }
+
+            // DEC
+            0xC6 => {
+                let a = self.a_zp();
+                self.op_dec(a);
+                self.cyc += 5;
+            }
+            0xD6 => {
+                let a = self.a_zpx();
+                self.op_dec(a);
+                self.cyc += 6;
+            }
+            0xCE => {
+                let a = self.a_abs();
+                self.op_dec(a);
+                self.cyc += 6;
+            }
+            0xDE => {
+                let a = self.a_absx();
+                self.op_dec(a);
+                self.cyc += 7;
+            }
+
+            // DEX
+            0xCA => {
+                self.op_dex();
+                self.cyc += 2;
+            }
+
+            // DEY
+            0x88 => {
+                self.op_dey();
+                self.cyc += 2;
+            }
+
+            // EOR
+            0x49 => {
+                let a = self.a_imm();
+                self.op_eor(a);
+                self.cyc += 2;
+            }
+            0x45 => {
+                let a = self.a_zp();
+                self.op_eor(a);
+                self.cyc += 3;
+            }
+            0x55 => {
+                let a = self.a_zpx();
+                self.op_eor(a);
+                self.cyc += 4;
+            }
+            0x4D => {
+                let a = self.a_abs();
+                self.op_eor(a);
+                self.cyc += 4;
+            }
+            0x5D => {
+                let a = self.a_absx();
+                self.op_eor(a);
+                self.cyc += 4;
+            }
+            0x59 => {
+                let a = self.a_absy();
+                self.op_eor(a);
+                self.cyc += 4;
+            }
+            0x41 => {
+                let a = self.a_indx();
+                self.op_eor(a);
+                self.cyc += 6;
+            }
+            0x51 => {
+                let a = self.a_indy();
+                self.op_eor(a);
+                self.cyc += 5;
+            }
+
+            // INC
+            0xE6 => {
+                let a = self.a_zp();
+                self.op_inc(a);
+                self.cyc += 5;
+            }
+            0xF6 => {
+                let a = self.a_zpx();
+                self.op_inc(a);
+                self.cyc += 6;
+            }
+            0xEE => {
+                let a = self.a_abs();
+                self.op_inc(a);
+                self.cyc += 6;
+            }
+            0xFE => {
+                let a = self.a_absx();
+                self.op_inc(a);
+                self.cyc += 6;
+            }
+
+            // INX
+            0xE8 => {
+                self.op_inx();
+                self.cyc += 2;
+            }
+
+            // INY
+            0xC8 => {
+                self.op_iny();
+                self.cyc += 2;
+            }
+
             // JMP
             0x4C => {
                 let a = self.a_abs();
@@ -533,10 +721,106 @@ impl Cpu {
                 self.cyc += 4;
             }
 
+            // LDY
+            0xA0 => {
+                let a = self.a_imm();
+                self.op_ldy(a);
+                self.cyc += 2;
+            }
+            0xA4 => {
+                let a = self.a_zp();
+                self.op_ldy(a);
+                self.cyc += 3;
+            }
+            0xB4 => {
+                let a = self.a_zpx();
+                self.op_ldy(a);
+                self.cyc += 4;
+            }
+            0xAC => {
+                let a = self.a_abs();
+                self.op_ldy(a);
+                self.cyc += 4;
+            }
+            0xBC => {
+                let a = self.a_absx();
+                self.op_ldy(a);
+                self.cyc += 4;
+            }
+
+            // LSR
+            0x4A => {
+                let a = self.a_acc();
+                self.op_lsr(a);
+                self.cyc += 2;
+            }
+            0x46 => {
+                let a = self.a_zp();
+                self.op_lsr(a);
+                self.cyc += 5;
+            }
+            0x56 => {
+                let a = self.a_zpx();
+                self.op_lsr(a);
+                self.cyc += 6;
+            }
+            0x4E => {
+                let a = self.a_abs();
+                self.op_lsr(a);
+                self.cyc += 6;
+            }
+            0x5E => {
+                let a = self.a_absx();
+                self.op_lsr(a);
+                self.cyc += 7;
+            }
+
             // NOP
             0xEA => {
                 self.op_nop();
                 self.cyc += 2;
+            }
+
+            // ORA
+            0x09 => {
+                let a = self.a_imm();
+                self.op_ora(a);
+                self.cyc += 2;
+            }
+            0x05 => {
+                let a = self.a_zp();
+                self.op_ora(a);
+                self.cyc += 3;
+            }
+            0x15 => {
+                let a = self.a_zpx();
+                self.op_ora(a);
+                self.cyc += 4;
+            }
+            0x0D => {
+                let a = self.a_zpy();
+                self.op_ora(a);
+                self.cyc += 4;
+            }
+            0x1D => {
+                let a = self.a_absx();
+                self.op_ora(a);
+                self.cyc += 4;
+            }
+            0x19 => {
+                let a = self.a_absy();
+                self.op_ora(a);
+                self.cyc += 4;
+            }
+            0x01 => {
+                let a = self.a_indx();
+                self.op_ora(a);
+                self.cyc += 6;
+            }
+            0x11 => {
+                let a = self.a_indy();
+                self.op_ora(a);
+                self.cyc += 5;
             }
 
             // PHA
@@ -560,13 +844,115 @@ impl Cpu {
             // PLP
             0x28 => {
                 self.op_plp();
-                self.cyc +=  4;
+                self.cyc += 4;
+            }
+
+            // ROL
+            0x2A => {
+                let a = self.a_acc();
+                self.op_rol(a);
+                self.cyc += 2;
+            }
+            0x26 => {
+                let a = self.a_zp();
+                self.op_rol(a);
+                self.cyc += 5;
+            }
+            0x36 => {
+                let a = self.a_zpx();
+                self.op_rol(a);
+                self.cyc += 6;
+            }
+            0x2E => {
+                let a = self.a_abs();
+                self.op_rol(a);
+                self.cyc += 6;
+            }
+            0x3E => {
+                let a = self.a_absx();
+                self.op_rol(a);
+                self.cyc += 7;
+            }
+
+            // ROR
+            0x6A => {
+                let a = self.a_acc();
+                self.op_ror(a);
+                self.cyc += 2;
+            }
+            0x66 => {
+                let a = self.a_zp();
+                self.op_ror(a);
+                self.cyc += 5;
+            }
+            0x76 => {
+                let a = self.a_zpx();
+                self.op_ror(a);
+                self.cyc += 6;
+            }
+            0x6E => {
+                let a = self.a_abs();
+                self.op_ror(a);
+                self.cyc += 6;
+            }
+            0x7E => {
+                let a = self.a_abs();
+                self.op_ror(a);
+                self.cyc += 7;
+            }
+
+            // RTI
+            0x40 => {
+                self.op_rti();
+                self.cyc += 6;
             }
 
             // RTS
             0x60 => {
                 self.op_rts();
                 self.cyc += 6;
+            }
+
+            // SBC
+            0xE9 => {
+                let a = self.a_imm();
+                self.op_sbc(a);
+                self.cyc += 2;
+            }
+            0xE5 => {
+                let a = self.a_zp();
+                self.op_sbc(a);
+                self.cyc += 3;
+            }
+            0xF5 => {
+                let a = self.a_zpx();
+                self.op_sbc(a);
+                self.cyc += 4;
+            }
+            0xED => {
+                let a = self.a_abs();
+                self.op_sbc(a);
+                self.cyc += 4;
+            }
+            0xFD => {
+                let a = self.a_absx();
+                self.op_sbc(a);
+                self.cyc += 4;
+            }
+            0xF9 => {
+                let a = self.a_absy();
+                self.op_sbc(a);
+                self.cyc += 4;
+            }
+            0xE1 => {
+                let a = self.a_indx();
+                self.op_sbc(a);
+                self.cyc += 6;
+            }
+            0xF1 => {
+                let a = self.a_indy();
+                self.op_sbc(a);
+                self.cyc += 5;
             }
 
             // SEC
@@ -641,6 +1027,59 @@ impl Cpu {
                 self.cyc += 4;
             }
 
+            // STY
+            0x84 => {
+                let a = self.a_zp();
+                self.op_sty(a);
+                self.cyc += 3;
+            }
+            0x94 => {
+                let a = self.a_zpx();
+                self.op_sty(a);
+                self.cyc += 4;
+            }
+            0x8C => {
+                let a = self.a_abs();
+                self.op_sty(a);
+                self.cyc += 4;
+            }
+
+            // TAX
+            0xAA => {
+                self.op_tax();
+                self.cyc += 2;
+            }
+
+            // TAY
+            0xA8 => {
+                self.op_tay();
+                self.cyc += 2;
+            }
+
+            // TSX
+            0xBA => {
+                self.op_tsx();
+                self.cyc += 2;
+            }
+
+            // TXA
+            0x8A => {
+                self.op_txa();
+                self.cyc += 2;
+            }
+
+            // TXS
+            0x9A => {
+                self.op_txs();
+                self.cyc += 2;
+            }
+
+            // TYA
+            0x98 => {
+                self.op_tya();
+                self.cyc += 2;
+            }
+
             _ => {
                 #[cfg(debug_assertions)]
                 panic!("OPCODE {:#04x} not yet implemented", opcode);
@@ -691,10 +1130,10 @@ impl Cpu {
         }
     }
 
-    fn compare(&mut self, v: i8) {
-        self.set_flag(FLAG_CARRY, self.a as i8 >= v);
-        self.set_flag(FLAG_ZERO, self.a as i8 == v);
-        self.set_flag(FLAG_NEGATIVE, (self.a as i8).wrapping_sub(v).is_negative());
+    fn compare(&mut self, r: u8, v: u8) {
+        self.set_flag(FLAG_CARRY, r >= v);
+        self.set_flag(FLAG_ZERO, r == v);
+        self.set_flag(FLAG_NEGATIVE, r.wrapping_sub(v) & 0x80 != 0);
     }
 
     fn push8(&mut self, v: u8) {
@@ -721,17 +1160,18 @@ impl Cpu {
     }
 
     fn op_adc(&mut self, a: Addr) {
-        let was_positive = (self.a as i8).is_positive();
+        let lhs = self.a as u16;
+        let rhs = self.read8(a) as u16;
+        let carry = self.get_flag(FLAG_CARRY) as u16;
 
-        let (of1, of2);
+        let res = lhs + rhs + carry;
+        let res8 = res as u8;
+        self.a = res8;
 
-        (self.a, of1) = self
-            .a
-            .overflowing_add(if self.get_flag(FLAG_CARRY) { 1 } else { 0 });
-        (self.a, of2) = self.a.overflowing_add(self.read8(a));
-
-        self.set_flag(FLAG_CARRY, of1 || of2);
-        self.set_flag(FLAG_OVERFLOW, was_positive && (self.a as i8).is_negative());
+        self.update_zero(res8);
+        self.update_negative(res8);
+        self.set_flag(FLAG_OVERFLOW, !(lhs ^ rhs) & (lhs ^ res) & 0x80 != 0);
+        self.set_flag(FLAG_CARRY, res > 0xFF);
     }
 
     fn op_and(&mut self, a: Addr) {
@@ -740,11 +1180,15 @@ impl Cpu {
         self.update_negative(self.a);
     }
 
-    fn op_asl(&mut self, v: Option<u8>) {
-        let v = if let Some(x) = v { x } else { self.a };
-        self.a = v << 1;
-        self.set_flag(FLAG_CARRY, v & (1 << 7) != 0);
-        self.update_negative(self.a);
+    fn op_asl(&mut self, a: Addr) {
+        let v = self.read8(a);
+        let new_v = v << 1;
+
+        self.set_flag(FLAG_CARRY, v & 0x80 != 0);
+        self.update_zero(new_v);
+        self.update_negative(new_v);
+
+        self.write8(a, new_v);
     }
 
     fn op_bcc(&mut self, a: Addr) -> u32 {
@@ -783,6 +1227,7 @@ impl Cpu {
         self.push16(self.pc);
         self.push8(self.p | FLAG_5 | FLAG_B);
         self.enable_flag(FLAG_INTERRUPT_DISABLE);
+        self.pc = self.read_mem16(0xFFFE);
     }
 
     fn op_bvc(&mut self, a: Addr) -> u32 {
@@ -810,47 +1255,45 @@ impl Cpu {
     }
 
     fn op_cmp(&mut self, a: Addr) {
-        self.compare(self.read8(a) as i8);
+        self.compare(self.a, self.read8(a));
     }
 
-    fn op_cpx(&mut self) {
-        self.compare(self.x as i8);
+    fn op_cpx(&mut self, a: Addr) {
+        self.compare(self.x, self.read8(a));
     }
 
-    fn op_cpy(&mut self) {
-        self.compare(self.y as i8);
+    fn op_cpy(&mut self, a: Addr) {
+        self.compare(self.y, self.read8(a));
     }
 
-    fn op_dec(&mut self, addr: u16) {
-        let v = self.read_mem8(addr).wrapping_sub(1);
-        self.write_mem8(addr, v);
+    fn op_dec(&mut self, a: Addr) {
+        let v = self.read8(a).wrapping_sub(1);
+        self.write8(a, v);
         self.update_zero(v);
         self.update_negative(v);
     }
 
     fn op_dex(&mut self) {
-        let v = self.x.wrapping_sub(1);
-        self.x = v;
-        self.update_zero(v);
-        self.update_negative(v);
+        self.x = self.x.wrapping_sub(1);
+        self.update_zero(self.x);
+        self.update_negative(self.x);
     }
 
     fn op_dey(&mut self) {
-        let v = self.y.wrapping_sub(1);
-        self.y = v;
-        self.update_zero(v);
-        self.update_negative(v);
+        self.y = self.y.wrapping_sub(1);
+        self.update_zero(self.y);
+        self.update_negative(self.y);
     }
 
-    fn op_eor(&mut self, m: u8) {
-        self.a ^= m;
+    fn op_eor(&mut self, a: Addr) {
+        self.a ^= self.read8(a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_inc(&mut self, addr: u16) {
-        let v = self.read_mem8(addr).wrapping_add(1);
-        self.write_mem8(addr, v);
+    fn op_inc(&mut self, a: Addr) {
+        let v = self.read8(a).wrapping_add(1);
+        self.write8(a, v);
         self.update_zero(v);
         self.update_negative(v);
     }
@@ -879,7 +1322,7 @@ impl Cpu {
 
     fn op_jsr(&mut self, a: Addr) {
         if let Addr::Mem(a) = a {
-            self.push16(self.pc);
+            self.push16(self.pc - 1);
             self.pc = a;
         } else {
             unreachable!();
@@ -904,17 +1347,21 @@ impl Cpu {
         self.update_negative(self.y);
     }
 
-    fn op_lsr(&mut self, v: Option<u8>) {
-        let v = if let Some(x) = v { x } else { self.a };
-        self.a = v >> 1;
-        self.set_flag(FLAG_CARRY, v & (1 << 0) != 0);
-        self.update_negative(self.a);
+    fn op_lsr(&mut self, a: Addr) {
+        let v = self.read8(a);
+        let new_v = v >> 1;
+
+        self.set_flag(FLAG_CARRY, v & 0x1 != 0);
+        self.update_zero(new_v);
+        self.update_negative(new_v);
+
+        self.write8(a, new_v);
     }
 
     fn op_nop(&mut self) {}
 
-    fn op_ora(&mut self, m: u8) {
-        self.a |= m;
+    fn op_ora(&mut self, a: Addr) {
+        self.a |= self.read8(a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
@@ -935,32 +1382,61 @@ impl Cpu {
     }
 
     fn op_plp(&mut self) {
-        self.p = self.pop8() & !(FLAG_B | FLAG_5);
+        self.p = (self.pop8() & !FLAG_B) | FLAG_5;
     }
 
-    fn op_rol(&mut self, v: u8) -> u8 {
-        let new_v = v << 1 | if self.get_flag(FLAG_CARRY) { 1 } else { 0 };
-        self.set_flag(FLAG_CARRY, v & (1 << 7) != 0);
-        new_v
+    fn op_rol(&mut self, a: Addr) {
+        let v = self.read8(a);
+        let mut new_v = v << 1;
+        if self.get_flag(FLAG_CARRY) {
+            new_v |= 0x01;
+        }
+        self.set_flag(FLAG_CARRY, v & 0x80 != 0);
+
+        self.update_zero(new_v);
+        self.update_negative(new_v);
+
+        self.write8(a, new_v);
     }
 
-    fn op_ror(&mut self, v: u8) -> u8 {
-        let new_v = v >> 1 | if self.get_flag(FLAG_CARRY) { 1 << 7 } else { 0 };
-        self.set_flag(FLAG_CARRY, v & 1 != 0);
-        new_v
+    fn op_ror(&mut self, a: Addr) {
+        let v = self.read8(a);
+        let mut new_v = v >> 1;
+        if self.get_flag(FLAG_CARRY) {
+            new_v |= 0x80;
+        }
+        self.set_flag(FLAG_CARRY, v & 0x01 != 0);
+
+        self.update_zero(new_v);
+        self.update_negative(new_v);
+
+        self.write8(a, new_v);
     }
 
     fn op_rti(&mut self) {
-        self.p = self.pop8() & !(FLAG_B | FLAG_5);
+        self.p = self.pop8() | FLAG_5;
         self.pc = self.pop16();
     }
 
     fn op_rts(&mut self) {
-        self.pc = self.pop16();
+        self.pc = self.pop16() + 1;
     }
 
-    fn op_sbc(&mut self) {
-        todo!()
+    fn op_sbc(&mut self, a: Addr) {
+        let lhs = self.a as i16;
+        let rhs = self.read8(a) as i16;
+        let borrow = !self.get_flag(FLAG_CARRY) as i16;
+
+        let res = lhs - rhs - borrow;
+        let res8 = res as u8;
+
+        self.update_zero(res8);
+        self.update_negative(res8);
+
+        self.set_flag(FLAG_CARRY, res >= 0);
+        self.set_flag(FLAG_OVERFLOW, (lhs ^ rhs) & (lhs ^ res) & 0x80 != 0);
+
+        self.a = res8;
     }
 
     fn op_sec(&mut self) {
@@ -983,8 +1459,8 @@ impl Cpu {
         self.write8(a, self.x);
     }
 
-    fn op_sty(&mut self, addr: u16) {
-        self.write_mem8(addr, self.y);
+    fn op_sty(&mut self, a: Addr) {
+        self.write8(a, self.y);
     }
 
     fn op_tax(&mut self) {
@@ -1012,9 +1488,7 @@ impl Cpu {
     }
 
     fn op_txs(&mut self) {
-        self.a = self.x;
-        self.update_zero(self.a);
-        self.update_negative(self.a);
+        self.sp = self.x;
     }
 
     fn op_tya(&mut self) {
