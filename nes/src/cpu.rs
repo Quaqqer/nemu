@@ -26,6 +26,18 @@ const FLAG_5: u8 = 1 << 5;
 const FLAG_OVERFLOW: u8 = 1 << 6;
 const FLAG_NEGATIVE: u8 = 1 << 7;
 
+macro_rules! op {
+    ($cpu:expr,$op:ident,$m:expr,$d:expr) => {{
+        let a = $cpu.fetch_addr($m);
+        $cpu.$op(a);
+        $cpu.cyc += $d;
+    }};
+    ($cpu:expr,$op:ident,$d:expr) => {{
+        $cpu.$op();
+        $cpu.cyc += $d;
+    }};
+}
+
 impl std::fmt::Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Cpu")
@@ -50,6 +62,22 @@ enum Addr {
     /// Memory with page crossed
     MemPC(u16),
     Rel(i8),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum AddrMode {
+    Acc,
+    Imm,
+    ZP,
+    ZPX,
+    ZPY,
+    Abs,
+    AbsX,
+    AbsY,
+    Rel,
+    Ind,
+    IndX,
+    IndY,
 }
 
 impl Cpu {
@@ -152,6 +180,24 @@ impl Cpu {
         let v = self.read_mem16(self.pc);
         self.pc += 2;
         v
+    }
+
+    fn fetch_addr(&mut self, m: AddrMode) -> Addr {
+        use AddrMode::*;
+        match m {
+            Acc => self.a_acc(),
+            Imm => self.a_imm(),
+            ZP => self.a_zp(),
+            ZPX => self.a_zpx(),
+            ZPY => self.a_zpy(),
+            Rel => self.a_rel(),
+            Abs => self.a_abs(),
+            AbsX => self.a_absx(),
+            AbsY => self.a_absy(),
+            Ind => self.a_ind(),
+            IndX => self.a_indx(),
+            IndY => self.a_indy(),
+        }
     }
 
     fn a_acc(&mut self) -> Addr {
@@ -274,1147 +320,365 @@ impl Cpu {
     pub fn cycle(&mut self) {
         let opcode = self.fetch8();
 
+        use AddrMode::*;
+
         match opcode {
             // ADC
-            0x69 => {
-                let a = self.a_imm();
-                self.op_adc(a);
-                self.cyc += 2;
-            }
-            0x65 => {
-                let a = self.a_zp();
-                self.op_adc(a);
-                self.cyc += 3;
-            }
-            0x75 => {
-                let a = self.a_zpx();
-                self.op_adc(a);
-                self.cyc += 4;
-            }
-            0x6D => {
-                let a = self.a_abs();
-                self.op_adc(a);
-                self.cyc += 4;
-            }
-            0x7D => {
-                let a = self.a_absx();
-                self.op_adc(a);
-                self.cyc += 4;
-            }
-            0x79 => {
-                let a = self.a_absy();
-                self.op_adc(a);
-                self.cyc += 4;
-            }
-            0x61 => {
-                let m = self.a_indx();
-                self.op_adc(m);
-                self.cyc += 6;
-            }
-            0x71 => {
-                let a = self.a_indy();
-                self.op_adc(a);
-                self.cyc += 5;
-            }
+            0x69 => op!(self, adc, Imm, 2),
+            0x65 => op!(self, adc, ZP, 3),
+            0x75 => op!(self, adc, ZPX, 4),
+            0x6D => op!(self, adc, Abs, 4),
+            0x7D => op!(self, adc, AbsX, 4),
+            0x79 => op!(self, adc, AbsY, 4),
+            0x61 => op!(self, adc, IndX, 6),
+            0x71 => op!(self, adc, IndY, 5),
 
             // AND
-            0x29 => {
-                let a = self.a_imm();
-                self.op_and(a);
-                self.cyc += 2;
-            }
-            0x25 => {
-                let a = self.a_zp();
-                self.op_and(a);
-                self.cyc += 3;
-            }
-            0x35 => {
-                let a = self.a_zpx();
-                self.op_and(a);
-                self.cyc += 4;
-            }
-            0x2D => {
-                let m = self.a_abs();
-                self.op_and(m);
-                self.cyc += 4;
-            }
-            0x3D => {
-                let a = self.a_absx();
-                self.op_and(a);
-                self.cyc += 4;
-            }
-            0x39 => {
-                let a = self.a_absy();
-                self.op_and(a);
-                self.cyc += 4;
-            }
-            0x21 => {
-                let a = self.a_indx();
-                self.op_and(a);
-                self.cyc += 6;
-            }
-            0x31 => {
-                let a = self.a_indy();
-                self.op_and(a);
-                self.cyc += 5;
-            }
+            0x29 => op!(self, and, Imm, 2),
+            0x25 => op!(self, and, ZP, 3),
+            0x35 => op!(self, and, ZPX, 4),
+            0x2D => op!(self, and, Abs, 4),
+            0x3D => op!(self, and, AbsX, 4),
+            0x39 => op!(self, and, AbsY, 4),
+            0x21 => op!(self, and, IndX, 6),
+            0x31 => op!(self, and, IndY, 5),
 
             // ASL
-            0x0A => {
-                let a = self.a_acc();
-                self.op_asl(a);
-                self.cyc += 2;
-            }
-            0x06 => {
-                let a = self.a_zp();
-                self.op_asl(a);
-                self.cyc += 5;
-            }
-            0x16 => {
-                let a = self.a_zpx();
-                self.op_asl(a);
-                self.cyc += 6;
-            }
-            0x0E => {
-                let a = self.a_abs();
-                self.op_asl(a);
-                self.cyc += 6;
-            }
-            0x1E => {
-                let a = self.a_absx();
-                self.op_asl(a);
-                self.cyc += 7;
-            }
+            0x0A => op!(self, asl, Acc, 2),
+            0x06 => op!(self, asl, ZP, 5),
+            0x16 => op!(self, asl, ZPX, 6),
+            0x0E => op!(self, asl, Abs, 6),
+            0x1E => op!(self, asl, AbsX, 7),
 
             // BCC
-            0x90 => {
-                let a = self.a_rel();
-                self.op_bcc(a);
-                self.cyc += 2;
-            }
+            0x90 => op!(self, bcc, Rel, 2),
 
             // BCS
-            0xB0 => {
-                let a = self.a_rel();
-                self.op_bcs(a);
-                self.cyc += 2;
-            }
+            0xB0 => op!(self, bcs, Rel, 2),
 
             // BEQ
-            0xF0 => {
-                let a = self.a_rel();
-                self.op_beq(a);
-                self.cyc += 2;
-            }
+            0xF0 => op!(self, beq, Rel, 2),
 
             // BIT
-            0x24 => {
-                let a = self.a_zp();
-                self.op_bit(a);
-                self.cyc += 3;
-            }
-            0x2C => {
-                let a = self.a_abs();
-                self.op_bit(a);
-                self.cyc += 4;
-            }
+            0x24 => op!(self, bit, ZP, 3),
+            0x2C => op!(self, bit, Abs, 4),
 
             // BMI
-            0x30 => {
-                let a = self.a_rel();
-                self.op_bmi(a);
-                self.cyc += 2;
-            }
+            0x30 => op!(self, bmi, Rel, 2),
 
             // BNE
-            0xD0 => {
-                let a = self.a_rel();
-                self.op_bne(a);
-                self.cyc += 2;
-            }
+            0xD0 => op!(self, bne, Rel, 2),
 
             // BPL
-            0x10 => {
-                let a = self.a_rel();
-                self.op_bpl(a);
-                self.cyc += 2;
-            }
+            0x10 => op!(self, bpl, Rel, 2),
 
             // BVC
-            0x50 => {
-                let a = self.a_rel();
-                self.op_bvc(a);
-                self.cyc += 2;
-            }
+            0x50 => op!(self, bvc, Rel, 2),
 
             // BVS
-            0x70 => {
-                let m = self.a_rel();
-                self.op_bvs(m);
-                self.cyc += 2;
-            }
+            0x70 => op!(self, bvs, Rel, 2),
 
             // CLC
-            0x18 => {
-                self.op_clc();
-                self.cyc += 2;
-            }
+            0x18 => op!(self, clc, 2),
 
             // CLD
-            0xD8 => {
-                self.op_cld();
-                self.cyc += 2;
-            }
+            0xD8 => op!(self, cld, 2),
 
             // CLV
-            0xB8 => {
-                self.op_clv();
-                self.cyc += 2;
-            }
+            0xB8 => op!(self, clv, 2),
 
             // CMP
-            0xC9 => {
-                let a = self.a_imm();
-                self.op_cmp(a);
-                self.cyc += 2;
-            }
-            0xC5 => {
-                let a = self.a_zp();
-                self.op_cmp(a);
-                self.cyc += 3;
-            }
-            0xD5 => {
-                let a = self.a_zpx();
-                self.op_cmp(a);
-                self.cyc += 4;
-            }
-            0xCD => {
-                let a = self.a_abs();
-                self.op_cmp(a);
-                self.cyc += 4;
-            }
-            0xDD => {
-                let a = self.a_absx();
-                self.op_cmp(a);
-                self.cyc += 4;
-            }
-            0xD9 => {
-                let a = self.a_absy();
-                self.op_cmp(a);
-                self.cyc += 4;
-            }
-            0xC1 => {
-                let a = self.a_indx();
-                self.op_cmp(a);
-                self.cyc += 6;
-            }
-            0xD1 => {
-                let a = self.a_indy();
-                self.op_cmp(a);
-                self.cyc += 5;
-            }
+            0xC9 => op!(self, cmp, Imm, 2),
+            0xC5 => op!(self, cmp, ZP, 3),
+            0xD5 => op!(self, cmp, ZPX, 4),
+            0xCD => op!(self, cmp, Abs, 4),
+            0xDD => op!(self, cmp, AbsX, 4),
+            0xD9 => op!(self, cmp, AbsY, 4),
+            0xC1 => op!(self, cmp, IndX, 6),
+            0xD1 => op!(self, cmp, IndY, 5),
 
             // CPX
-            0xE0 => {
-                let a = self.a_imm();
-                self.op_cpx(a);
-                self.cyc += 2;
-            }
-            0xE4 => {
-                let a = self.a_zp();
-                self.op_cpx(a);
-                self.cyc += 3;
-            }
-            0xEC => {
-                let a = self.a_abs();
-                self.op_cpx(a);
-                self.cyc += 4;
-            }
+            0xE0 => op!(self, cpx, Imm, 2),
+            0xE4 => op!(self, cpx, ZP, 3),
+            0xEC => op!(self, cpx, Abs, 4),
 
             // CPY
-            0xC0 => {
-                let a = self.a_imm();
-                self.op_cpy(a);
-                self.cyc += 2;
-            }
-            0xC4 => {
-                let a = self.a_zp();
-                self.op_cpy(a);
-                self.cyc += 3;
-            }
-            0xCC => {
-                let a = self.a_abs();
-                self.op_cpy(a);
-                self.cyc += 4;
-            }
+            0xC0 => op!(self, cpy, Imm, 2),
+            0xC4 => op!(self, cpy, ZP, 3),
+            0xCC => op!(self, cpy, Abs, 4),
 
             // DEC
-            0xC6 => {
-                let a = self.a_zp();
-                self.op_dec(a);
-                self.cyc += 5;
-            }
-            0xD6 => {
-                let a = self.a_zpx();
-                self.op_dec(a);
-                self.cyc += 6;
-            }
-            0xCE => {
-                let a = self.a_abs();
-                self.op_dec(a);
-                self.cyc += 6;
-            }
-            0xDE => {
-                let a = self.a_absx();
-                self.op_dec(a);
-                self.cyc += 7;
-            }
+            0xC6 => op!(self, dec, ZP, 5),
+            0xD6 => op!(self, dec, ZPX, 6),
+            0xCE => op!(self, dec, Abs, 6),
+            0xDE => op!(self, dec, AbsX, 7),
 
             // DEX
-            0xCA => {
-                self.op_dex();
-                self.cyc += 2;
-            }
+            0xCA => op!(self, dex, 2),
 
             // DEY
-            0x88 => {
-                self.op_dey();
-                self.cyc += 2;
-            }
+            0x88 => op!(self, dey, 2),
 
             // EOR
-            0x49 => {
-                let a = self.a_imm();
-                self.op_eor(a);
-                self.cyc += 2;
-            }
-            0x45 => {
-                let a = self.a_zp();
-                self.op_eor(a);
-                self.cyc += 3;
-            }
-            0x55 => {
-                let a = self.a_zpx();
-                self.op_eor(a);
-                self.cyc += 4;
-            }
-            0x4D => {
-                let a = self.a_abs();
-                self.op_eor(a);
-                self.cyc += 4;
-            }
-            0x5D => {
-                let a = self.a_absx();
-                self.op_eor(a);
-                self.cyc += 4;
-            }
-            0x59 => {
-                let a = self.a_absy();
-                self.op_eor(a);
-                self.cyc += 4;
-            }
-            0x41 => {
-                let a = self.a_indx();
-                self.op_eor(a);
-                self.cyc += 6;
-            }
-            0x51 => {
-                let a = self.a_indy();
-                self.op_eor(a);
-                self.cyc += 5;
-            }
+            0x49 => op!(self, eor, Imm, 2),
+            0x45 => op!(self, eor, ZP, 3),
+            0x55 => op!(self, eor, ZPX, 4),
+            0x4D => op!(self, eor, Abs, 4),
+            0x5D => op!(self, eor, AbsX, 4),
+            0x59 => op!(self, eor, AbsY, 4),
+            0x41 => op!(self, eor, IndX, 6),
+            0x51 => op!(self, eor, IndY, 5),
 
             // INC
-            0xE6 => {
-                let a = self.a_zp();
-                self.op_inc(a);
-                self.cyc += 5;
-            }
-            0xF6 => {
-                let a = self.a_zpx();
-                self.op_inc(a);
-                self.cyc += 6;
-            }
-            0xEE => {
-                let a = self.a_abs();
-                self.op_inc(a);
-                self.cyc += 6;
-            }
-            0xFE => {
-                let a = self.a_absx();
-                self.op_inc(a);
-                self.cyc += 7;
-            }
+            0xE6 => op!(self, inc, ZP, 5),
+            0xF6 => op!(self, inc, ZPX, 6),
+            0xEE => op!(self, inc, Abs, 6),
+            0xFE => op!(self, inc, AbsX, 7),
 
             // INX
-            0xE8 => {
-                self.op_inx();
-                self.cyc += 2;
-            }
+            0xE8 => op!(self, inx, 2),
 
             // INY
-            0xC8 => {
-                self.op_iny();
-                self.cyc += 2;
-            }
+            0xC8 => op!(self, iny, 2),
 
             // JMP
-            0x4C => {
-                let a = self.a_abs();
-                self.op_jmp(a);
-                self.cyc += 3;
-            }
-            0x6C => {
-                let a = self.a_ind();
-                self.op_jmp(a);
-                self.cyc += 5;
-            }
+            0x4C => op!(self, jmp, Abs, 3),
+            0x6C => op!(self, jmp, Ind, 5),
 
             // JSR
-            0x20 => {
-                let a = self.a_abs();
-                self.op_jsr(a);
-                self.cyc += 6;
-            }
+            0x20 => op!(self, jsr, Abs, 6),
 
             // LDA
-            0xA9 => {
-                let a = self.a_imm();
-                self.op_lda(a);
-                self.cyc += 2;
-            }
-            0xA5 => {
-                let a = self.a_zp();
-                self.op_lda(a);
-                self.cyc += 3;
-            }
-            0xB5 => {
-                let a = self.a_zpx();
-                self.op_lda(a);
-                self.cyc += 4;
-            }
-            0xAD => {
-                let m = self.a_abs();
-                self.op_lda(m);
-                self.cyc += 4;
-            }
-            0xBD => {
-                let a = self.a_absx();
-                self.op_lda(a);
-                self.cyc += 4;
-            }
-            0xB9 => {
-                let a = self.a_absy();
-                self.op_lda(a);
-                self.cyc += 4;
-            }
-            0xA1 => {
-                let a = self.a_indx();
-                self.op_lda(a);
-                self.cyc += 6;
-            }
-            0xB1 => {
-                let a = self.a_indy();
-                self.op_lda(a);
-                self.cyc += 5;
-            }
+            0xA9 => op!(self, lda, Imm, 2),
+            0xA5 => op!(self, lda, ZP, 3),
+            0xB5 => op!(self, lda, ZPX, 4),
+            0xAD => op!(self, lda, Abs, 4),
+            0xBD => op!(self, lda, AbsX, 4),
+            0xB9 => op!(self, lda, AbsY, 4),
+            0xA1 => op!(self, lda, IndX, 6),
+            0xB1 => op!(self, lda, IndY, 5),
 
             // LDX
-            0xA2 => {
-                let a = self.a_imm();
-                self.op_ldx(a);
-                self.cyc += 2;
-            }
-            0xA6 => {
-                let m = self.a_zp();
-                self.op_ldx(m);
-                self.cyc += 3;
-            }
-            0xB6 => {
-                let m = self.a_zpy();
-                self.op_ldx(m);
-                self.cyc += 4;
-            }
-            0xAE => {
-                let m = self.a_abs();
-                self.op_ldx(m);
-                self.cyc += 4;
-            }
-            0xBE => {
-                let a = self.a_absy();
-                self.op_ldx(a);
-                self.cyc += 4;
-            }
+            0xA2 => op!(self, ldx, Imm, 2),
+            0xA6 => op!(self, ldx, ZP, 3),
+            0xB6 => op!(self, ldx, ZPY, 4),
+            0xAE => op!(self, ldx, Abs, 4),
+            0xBE => op!(self, ldx, AbsY, 4),
 
             // LDY
-            0xA0 => {
-                let a = self.a_imm();
-                self.op_ldy(a);
-                self.cyc += 2;
-            }
-            0xA4 => {
-                let a = self.a_zp();
-                self.op_ldy(a);
-                self.cyc += 3;
-            }
-            0xB4 => {
-                let a = self.a_zpx();
-                self.op_ldy(a);
-                self.cyc += 4;
-            }
-            0xAC => {
-                let a = self.a_abs();
-                self.op_ldy(a);
-                self.cyc += 4;
-            }
-            0xBC => {
-                let a = self.a_absx();
-                self.op_ldy(a);
-                self.cyc += 4;
-            }
+            0xA0 => op!(self, ldy, Imm, 2),
+            0xA4 => op!(self, ldy, ZP, 3),
+            0xB4 => op!(self, ldy, ZPX, 4),
+            0xAC => op!(self, ldy, Abs, 4),
+            0xBC => op!(self, ldy, AbsX, 4),
 
             // LSR
-            0x4A => {
-                let a = self.a_acc();
-                self.op_lsr(a);
-                self.cyc += 2;
-            }
-            0x46 => {
-                let a = self.a_zp();
-                self.op_lsr(a);
-                self.cyc += 5;
-            }
-            0x56 => {
-                let a = self.a_zpx();
-                self.op_lsr(a);
-                self.cyc += 6;
-            }
-            0x4E => {
-                let a = self.a_abs();
-                self.op_lsr(a);
-                self.cyc += 6;
-            }
-            0x5E => {
-                let a = self.a_absx();
-                self.op_lsr(a);
-                self.cyc += 7;
-            }
+            0x4A => op!(self, lsr, Acc, 2),
+            0x46 => op!(self, lsr, ZP, 5),
+            0x56 => op!(self, lsr, ZPX, 6),
+            0x4E => op!(self, lsr, Abs, 6),
+            0x5E => op!(self, lsr, AbsX, 7),
 
             // NOP
-            0xEA => {
-                self.op_nop();
-                self.cyc += 2;
-            }
+            0xEA => op!(self, nop, 2),
 
             // ORA
-            0x09 => {
-                let a = self.a_imm();
-                self.op_ora(a);
-                self.cyc += 2;
-            }
-            0x05 => {
-                let a = self.a_zp();
-                self.op_ora(a);
-                self.cyc += 3;
-            }
-            0x15 => {
-                let a = self.a_zpx();
-                self.op_ora(a);
-                self.cyc += 4;
-            }
-            0x0D => {
-                let a = self.a_abs();
-                self.op_ora(a);
-                self.cyc += 4;
-            }
-            0x1D => {
-                let a = self.a_absx();
-                self.op_ora(a);
-                self.cyc += 4;
-            }
-            0x19 => {
-                let a = self.a_absy();
-                self.op_ora(a);
-                self.cyc += 4;
-            }
-            0x01 => {
-                let a = self.a_indx();
-                self.op_ora(a);
-                self.cyc += 6;
-            }
-            0x11 => {
-                let a = self.a_indy();
-                self.op_ora(a);
-                self.cyc += 5;
-            }
+            0x09 => op!(self, ora, Imm, 2),
+            0x05 => op!(self, ora, ZP, 3),
+            0x15 => op!(self, ora, ZPX, 4),
+            0x0D => op!(self, ora, Abs, 4),
+            0x1D => op!(self, ora, AbsX, 4),
+            0x19 => op!(self, ora, AbsY, 4),
+            0x01 => op!(self, ora, IndX, 6),
+            0x11 => op!(self, ora, IndY, 5),
 
             // PHA
-            0x48 => {
-                self.op_pha();
-                self.cyc += 3;
-            }
+            0x48 => op!(self, pha, 3),
 
             // PHP
-            0x08 => {
-                self.op_php();
-                self.cyc += 3;
-            }
+            0x08 => op!(self, php, 3),
 
             // PLA
-            0x68 => {
-                self.op_pla();
-                self.cyc += 4;
-            }
+            0x68 => op!(self, pla, 4),
 
             // PLP
-            0x28 => {
-                self.op_plp();
-                self.cyc += 4;
-            }
+            0x28 => op!(self, plp, 4),
 
             // ROL
-            0x2A => {
-                let a = self.a_acc();
-                self.op_rol(a);
-                self.cyc += 2;
-            }
-            0x26 => {
-                let a = self.a_zp();
-                self.op_rol(a);
-                self.cyc += 5;
-            }
-            0x36 => {
-                let a = self.a_zpx();
-                self.op_rol(a);
-                self.cyc += 6;
-            }
-            0x2E => {
-                let a = self.a_abs();
-                self.op_rol(a);
-                self.cyc += 6;
-            }
-            0x3E => {
-                let a = self.a_absx();
-                self.op_rol(a);
-                self.cyc += 7;
-            }
+            0x2A => op!(self, rol, Acc, 2),
+            0x26 => op!(self, rol, ZP, 5),
+            0x36 => op!(self, rol, ZPX, 6),
+            0x2E => op!(self, rol, Abs, 6),
+            0x3E => op!(self, rol, AbsX, 7),
 
             // ROR
-            0x6A => {
-                let a = self.a_acc();
-                self.op_ror(a);
-                self.cyc += 2;
-            }
-            0x66 => {
-                let a = self.a_zp();
-                self.op_ror(a);
-                self.cyc += 5;
-            }
-            0x76 => {
-                let a = self.a_zpx();
-                self.op_ror(a);
-                self.cyc += 6;
-            }
-            0x6E => {
-                let a = self.a_abs();
-                self.op_ror(a);
-                self.cyc += 6;
-            }
-            0x7E => {
-                let a = self.a_absx();
-                self.op_ror(a);
-                self.cyc += 7;
-            }
+            0x6A => op!(self, ror, Acc, 2),
+            0x66 => op!(self, ror, ZP, 5),
+            0x76 => op!(self, ror, ZPX, 6),
+            0x6E => op!(self, ror, Abs, 6),
+            0x7E => op!(self, ror, AbsX, 7),
 
             // RTI
-            0x40 => {
-                self.op_rti();
-                self.cyc += 6;
-            }
+            0x40 => op!(self, rti, 6),
 
             // RTS
-            0x60 => {
-                self.op_rts();
-                self.cyc += 6;
-            }
+            0x60 => op!(self, rts, 6),
 
             // SBC
-            0xE9 | 0xEB => {
-                let a = self.a_imm();
-                self.op_sbc(a);
-                self.cyc += 2;
-            }
-            0xE5 => {
-                let a = self.a_zp();
-                self.op_sbc(a);
-                self.cyc += 3;
-            }
-            0xF5 => {
-                let a = self.a_zpx();
-                self.op_sbc(a);
-                self.cyc += 4;
-            }
-            0xED => {
-                let a = self.a_abs();
-                self.op_sbc(a);
-                self.cyc += 4;
-            }
-            0xFD => {
-                let a = self.a_absx();
-                self.op_sbc(a);
-                self.cyc += 4;
-            }
-            0xF9 => {
-                let a = self.a_absy();
-                self.op_sbc(a);
-                self.cyc += 4;
-            }
-            0xE1 => {
-                let a = self.a_indx();
-                self.op_sbc(a);
-                self.cyc += 6;
-            }
-            0xF1 => {
-                let a = self.a_indy();
-                self.op_sbc(a);
-                self.cyc += 5;
-            }
+            0xE9 | 0xEB => op!(self, sbc, Imm, 2),
+            0xE5 => op!(self, sbc, ZP, 3),
+            0xF5 => op!(self, sbc, ZPX, 4),
+            0xED => op!(self, sbc, Abs, 4),
+            0xFD => op!(self, sbc, AbsX, 4),
+            0xF9 => op!(self, sbc, AbsY, 4),
+            0xE1 => op!(self, sbc, IndX, 6),
+            0xF1 => op!(self, sbc, IndY, 5),
 
             // SEC
-            0x38 => {
-                self.op_sec();
-                self.cyc += 2;
-            }
+            0x38 => op!(self, sec, 2),
 
             // SED
-            0xF8 => {
-                self.op_sed();
-                self.cyc += 2;
-            }
+            0xF8 => op!(self, sed, 2),
 
             // SEI
-            0x78 => {
-                self.op_sei();
-                self.cyc += 2;
-            }
+            0x78 => op!(self, sei, 2),
 
             // STA
-            0x85 => {
-                let a = self.a_zp();
-                self.op_sta(a);
-                self.cyc += 3;
-            }
-            0x95 => {
-                let a = self.a_zpx();
-                self.op_sta(a);
-                self.cyc += 4;
-            }
-            0x8D => {
-                let a = self.a_abs();
-                self.op_sta(a);
-                self.cyc += 4;
-            }
-            0x9D => {
-                let a = self.a_absx();
-                self.op_sta(a);
-                self.cyc += 5;
-            }
-            0x99 => {
-                let a = self.a_absy();
-                self.op_sta(a);
-                self.cyc += 5;
-            }
-            0x81 => {
-                let a = self.a_indx();
-                self.op_sta(a);
-                self.cyc += 6;
-            }
-            0x91 => {
-                let a = self.a_indy();
-                self.op_sta(a);
-                self.cyc += 6;
-            }
+            0x85 => op!(self, sta, ZP, 3),
+            0x95 => op!(self, sta, ZPX, 4),
+            0x8D => op!(self, sta, Abs, 4),
+            0x9D => op!(self, sta, AbsX, 5),
+            0x99 => op!(self, sta, AbsY, 5),
+            0x81 => op!(self, sta, IndX, 6),
+            0x91 => op!(self, sta, IndY, 6),
 
             // STX
-            0x86 => {
-                let a = self.a_zp();
-                self.op_stx(a);
-                self.cyc += 3;
-            }
-            0x96 => {
-                let a = self.a_zpy();
-                self.op_stx(a);
-                self.cyc += 4;
-            }
-            0x8E => {
-                let a = self.a_abs();
-                self.op_stx(a);
-                self.cyc += 4;
-            }
+            0x86 => op!(self, stx, ZP, 3),
+            0x96 => op!(self, stx, ZPY, 4),
+            0x8E => op!(self, stx, Abs, 4),
 
             // STY
-            0x84 => {
-                let a = self.a_zp();
-                self.op_sty(a);
-                self.cyc += 3;
-            }
-            0x94 => {
-                let a = self.a_zpx();
-                self.op_sty(a);
-                self.cyc += 4;
-            }
-            0x8C => {
-                let a = self.a_abs();
-                self.op_sty(a);
-                self.cyc += 4;
-            }
+            0x84 => op!(self, sty, ZP, 3),
+            0x94 => op!(self, sty, ZPX, 4),
+            0x8C => op!(self, sty, Abs, 4),
 
             // TAX
-            0xAA => {
-                self.op_tax();
-                self.cyc += 2;
-            }
+            0xAA => op!(self, tax, 2),
 
             // TAY
-            0xA8 => {
-                self.op_tay();
-                self.cyc += 2;
-            }
+            0xA8 => op!(self, tay, 2),
 
             // TSX
-            0xBA => {
-                self.op_tsx();
-                self.cyc += 2;
-            }
+            0xBA => op!(self, tsx, 2),
 
             // TXA
-            0x8A => {
-                self.op_txa();
-                self.cyc += 2;
-            }
+            0x8A => op!(self, txa, 2),
 
             // TXS
-            0x9A => {
-                self.op_txs();
-                self.cyc += 2;
-            }
+            0x9A => op!(self, txs, 2),
 
             // TYA
-            0x98 => {
-                self.op_tya();
-                self.cyc += 2;
-            }
+            0x98 => op!(self, tya, 2),
 
             // Illegal opcodes
 
             // NOP
             0x04 | 0x44 | 0x64 => {
                 let _a = self.a_zp();
-                self.op_nop();
+                self.nop();
                 self.cyc += 3;
             }
             0x0c => {
                 let _a = self.a_abs();
-                self.op_nop();
+                self.nop();
                 self.cyc += 4;
             }
             0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
                 let a = self.a_indx();
                 self.read8(a);
-                self.op_nop();
+                self.nop();
                 self.cyc += 4;
             }
-            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => {
-                self.op_nop();
-                self.cyc += 2;
-            }
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => op!(self, nop, 2),
             0x80 => {
                 let _a = self.a_imm();
-                self.op_nop();
+                self.nop();
                 self.cyc += 2;
             }
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
                 let a = self.a_absx();
                 self.read8(a);
-                self.op_nop();
+                self.nop();
                 self.cyc += 4;
             }
 
             // LAX
-            0xA3 => {
-                let a = self.a_indx();
-                self.op_lax(a);
-                self.cyc += 6;
-            }
-            0xA7 => {
-                let a = self.a_zp();
-                self.op_lax(a);
-                self.cyc += 3;
-            }
-            0xAF => {
-                let a = self.a_abs();
-                self.op_lax(a);
-                self.cyc += 4;
-            }
-            0xB3 => {
-                let a = self.a_indy();
-                self.op_lax(a);
-                self.cyc += 5;
-            }
-            0xB7 => {
-                let a = self.a_zpy();
-                self.op_lax(a);
-                self.cyc += 4;
-            }
-            0xBF => {
-                let a = self.a_absy();
-                self.op_lax(a);
-                self.cyc += 4;
-            }
+            0xA3 => op!(self, lax, IndX, 6),
+            0xA7 => op!(self, lax, ZP, 3),
+            0xAF => op!(self, lax, Abs, 4),
+            0xB3 => op!(self, lax, IndY, 5),
+            0xB7 => op!(self, lax, ZPY, 4),
+            0xBF => op!(self, lax, AbsY, 4),
 
             // SAX
-            0x83 => {
-                let a = self.a_indx();
-                self.op_sax(a);
-                self.cyc += 6;
-            }
-            0x87 => {
-                let a = self.a_zp();
-                self.op_sax(a);
-                self.cyc += 3;
-            }
-            0x8F => {
-                let a = self.a_abs();
-                self.op_sax(a);
-                self.cyc += 4;
-            }
-            0x97 => {
-                let a = self.a_zpy();
-                self.op_sax(a);
-                self.cyc += 4;
-            }
+            0x83 => op!(self, sax, IndX, 6),
+            0x87 => op!(self, sax, ZP, 3),
+            0x8F => op!(self, sax, Abs, 4),
+            0x97 => op!(self, sax, ZPY, 4),
 
             // DCP
-            0xC3 => {
-                let a = self.a_indx();
-                self.op_dcp(a);
-                self.cyc += 8;
-            }
-            0xC7 => {
-                let a = self.a_zp();
-                self.op_dcp(a);
-                self.cyc += 5;
-            }
-            0xCF => {
-                let a = self.a_abs();
-                self.op_dcp(a);
-                self.cyc += 6;
-            }
-            0xD3 => {
-                let a = self.a_indy();
-                self.op_dcp(a);
-                self.cyc += 6;
-            }
-            0xD7 => {
-                let a = self.a_zpx();
-                self.op_dcp(a);
-                self.cyc += 6;
-            }
-            0xDB => {
-                let a = self.a_absy();
-                self.op_dcp(a);
-                self.cyc += 5;
-            }
-            0xDF => {
-                let a = self.a_absx();
-                self.op_dcp(a);
-                self.cyc += 5;
-            }
+            0xC3 => op!(self, dcp, IndX, 8),
+            0xC7 => op!(self, dcp, ZP, 5),
+            0xCF => op!(self, dcp, Abs, 6),
+            0xD3 => op!(self, dcp, IndY, 6),
+            0xD7 => op!(self, dcp, ZPX, 6),
+            0xDB => op!(self, dcp, AbsY, 5),
+            0xDF => op!(self, dcp, AbsX, 5),
 
             // ISC
-            0xE3 => {
-                let a = self.a_indx();
-                self.op_isc(a);
-                self.cyc += 8;
-            }
-            0xE7 => {
-                let a = self.a_zp();
-                self.op_isc(a);
-                self.cyc += 5;
-            }
-            0xEF => {
-                let a = self.a_abs();
-                self.op_isc(a);
-                self.cyc += 6;
-            }
-            0xF3 => {
-                let a = self.a_indy();
-                self.op_isc(a);
-                self.cyc += 6;
-            }
-            0xF7 => {
-                let a = self.a_zpx();
-                self.op_isc(a);
-                self.cyc += 6;
-            }
-            0xFB => {
-                let a = self.a_absy();
-                self.op_isc(a);
-                self.cyc += 5;
-            }
-            0xFF => {
-                let a = self.a_absx();
-                self.op_isc(a);
-                self.cyc += 5;
-            }
+            0xE3 => op!(self, isc, IndX, 8),
+            0xE7 => op!(self, isc, ZP, 5),
+            0xEF => op!(self, isc, Abs, 6),
+            0xF3 => op!(self, isc, IndY, 6),
+            0xF7 => op!(self, isc, ZPX, 6),
+            0xFB => op!(self, isc, AbsY, 5),
+            0xFF => op!(self, isc, AbsX, 5),
 
             // SLO
-            0x03 => {
-                let a = self.a_indx();
-                self.op_slo(a);
-                self.cyc += 8;
-            }
-            0x07 => {
-                let a = self.a_zp();
-                self.op_slo(a);
-                self.cyc += 5;
-            }
-            0x0F => {
-                let a = self.a_abs();
-                self.op_slo(a);
-                self.cyc += 6;
-            }
-            0x13 => {
-                let a = self.a_indy();
-                self.op_slo(a);
-                self.cyc += 6;
-            }
-            0x17 => {
-                let a = self.a_zpx();
-                self.op_slo(a);
-                self.cyc += 6;
-            }
-            0x1B => {
-                let a = self.a_absy();
-                self.op_slo(a);
-                self.cyc += 5;
-            }
-            0x1F => {
-                let a = self.a_absx();
-                self.op_slo(a);
-                self.cyc += 5;
-            }
+            0x03 => op!(self, slo, IndX, 8),
+            0x07 => op!(self, slo, ZP, 5),
+            0x0F => op!(self, slo, Abs, 6),
+            0x13 => op!(self, slo, IndY, 6),
+            0x17 => op!(self, slo, ZPX, 6),
+            0x1B => op!(self, slo, AbsY, 5),
+            0x1F => op!(self, slo, AbsX, 5),
 
             // RLA
-            0x23 => {
-                let a = self.a_indx();
-                self.op_rla(a);
-                self.cyc += 8;
-            }
-            0x27 => {
-                let a = self.a_zp();
-                self.op_rla(a);
-                self.cyc += 5;
-            }
-            0x2F => {
-                let a = self.a_abs();
-                self.op_rla(a);
-                self.cyc += 6;
-            }
-            0x33 => {
-                let a = self.a_indy();
-                self.op_rla(a);
-                self.cyc += 6;
-            }
-            0x37 => {
-                let a = self.a_zpx();
-                self.op_rla(a);
-                self.cyc += 6;
-            }
-            0x3B => {
-                let a = self.a_absy();
-                self.op_rla(a);
-                self.cyc += 5;
-            }
-            0x3F => {
-                let a = self.a_absx();
-                self.op_rla(a);
-                self.cyc += 5;
-            }
+            0x23 => op!(self, rla, IndX, 8),
+            0x27 => op!(self, rla, ZP, 5),
+            0x2F => op!(self, rla, Abs, 6),
+            0x33 => op!(self, rla, IndY, 6),
+            0x37 => op!(self, rla, ZPX, 6),
+            0x3B => op!(self, rla, AbsY, 5),
+            0x3F => op!(self, rla, AbsX, 5),
 
             // SRE
-            0x43 => {
-                let a = self.a_indx();
-                self.op_sre(a);
-                self.cyc += 8;
-            }
-            0x47 => {
-                let a = self.a_zp();
-                self.op_sre(a);
-                self.cyc += 5;
-            }
-            0x4F => {
-                let a = self.a_abs();
-                self.op_sre(a);
-                self.cyc += 6;
-            }
-            0x53 => {
-                let a = self.a_indy();
-                self.op_sre(a);
-                self.cyc += 6;
-            }
-            0x57 => {
-                let a = self.a_zpx();
-                self.op_sre(a);
-                self.cyc += 6;
-            }
-            0x5B => {
-                let a = self.a_absy();
-                self.op_sre(a);
-                self.cyc += 5;
-            }
-            0x5F => {
-                let a = self.a_absx();
-                self.op_sre(a);
-                self.cyc += 5;
-            }
+            0x43 => op!(self, sre, IndX, 8),
+            0x47 => op!(self, sre, ZP, 5),
+            0x4F => op!(self, sre, Abs, 6),
+            0x53 => op!(self, sre, IndY, 6),
+            0x57 => op!(self, sre, ZPX, 6),
+            0x5B => op!(self, sre, AbsY, 5),
+            0x5F => op!(self, sre, AbsX, 5),
 
             // RRA
-            0x63 => {
-                let a = self.a_indx();
-                self.op_rra(a);
-                self.cyc += 8;
-            }
-            0x67 => {
-                let a = self.a_zp();
-                self.op_rra(a);
-                self.cyc += 5;
-            }
-            0x6F => {
-                let a = self.a_abs();
-                self.op_rra(a);
-                self.cyc += 6;
-            }
-            0x73 => {
-                let a = self.a_indy();
-                self.op_rra(a);
-                self.cyc += 6;
-            }
-            0x77 => {
-                let a = self.a_zpx();
-                self.op_rra(a);
-                self.cyc += 6;
-            }
-            0x7B => {
-                let a = self.a_absy();
-                self.op_rra(a);
-                self.cyc += 5;
-            }
-            0x7F => {
-                let a = self.a_absx();
-                self.op_rra(a);
-                self.cyc += 5;
-            }
+            0x63 => op!(self, rra, IndX, 8),
+            0x67 => op!(self, rra, ZP, 5),
+            0x6F => op!(self, rra, Abs, 6),
+            0x73 => op!(self, rra, IndY, 6),
+            0x77 => op!(self, rra, ZPX, 6),
+            0x7B => op!(self, rra, AbsY, 5),
+            0x7F => op!(self, rra, AbsX, 5),
 
             _ => {
                 #[cfg(debug_assertions)]
@@ -1495,7 +759,7 @@ impl Cpu {
         u16::from_le_bytes([l, r])
     }
 
-    fn op_adc(&mut self, a: Addr) {
+    fn adc(&mut self, a: Addr) {
         let lhs = self.a as u16;
         let rhs = self.read8(a) as u16;
         let carry = self.get_flag(FLAG_CARRY) as u16;
@@ -1510,13 +774,13 @@ impl Cpu {
         self.set_flag(FLAG_CARRY, res > 0xFF);
     }
 
-    fn op_and(&mut self, a: Addr) {
+    fn and(&mut self, a: Addr) {
         self.a &= self.read8(a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_asl(&mut self, a: Addr) {
+    fn asl(&mut self, a: Addr) {
         let v = self.read8(a);
         let new_v = v << 1;
 
@@ -1527,19 +791,19 @@ impl Cpu {
         self.write8(a, new_v);
     }
 
-    fn op_bcc(&mut self, a: Addr) {
+    fn bcc(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_CARRY));
     }
 
-    fn op_bcs(&mut self, a: Addr) {
+    fn bcs(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| cpu.get_flag(FLAG_CARRY));
     }
 
-    fn op_beq(&mut self, a: Addr) {
+    fn beq(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| cpu.get_flag(FLAG_ZERO));
     }
 
-    fn op_bit(&mut self, a: Addr) {
+    fn bit(&mut self, a: Addr) {
         let m = self.read8(a);
         let v = self.a & m;
         self.set_flag(FLAG_OVERFLOW, m & (1 << 6) != 0);
@@ -1547,121 +811,121 @@ impl Cpu {
         self.set_flag(FLAG_ZERO, v == 0);
     }
 
-    fn op_bmi(&mut self, a: Addr) {
+    fn bmi(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| cpu.get_flag(FLAG_NEGATIVE));
     }
 
-    fn op_bne(&mut self, a: Addr) {
+    fn bne(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_ZERO));
     }
 
-    fn op_bpl(&mut self, a: Addr) {
+    fn bpl(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_NEGATIVE));
     }
 
-    fn op_brk(&mut self) {
+    fn brk(&mut self) {
         self.push16(self.pc);
         self.push8(self.p | FLAG_5 | FLAG_B);
         self.enable_flag(FLAG_INTERRUPT_DISABLE);
         self.pc = self.read_mem16(0xFFFE);
     }
 
-    fn op_bvc(&mut self, a: Addr) {
+    fn bvc(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_OVERFLOW));
     }
 
-    fn op_bvs(&mut self, a: Addr) {
+    fn bvs(&mut self, a: Addr) {
         self.generic_branch(a, |cpu| cpu.get_flag(FLAG_OVERFLOW));
     }
 
-    fn op_clc(&mut self) {
+    fn clc(&mut self) {
         self.disable_flag(FLAG_CARRY);
     }
 
-    fn op_cld(&mut self) {
+    fn cld(&mut self) {
         self.disable_flag(FLAG_DECIMAL);
     }
 
-    fn op_cli(&mut self) {
+    fn cli(&mut self) {
         self.disable_flag(FLAG_INTERRUPT_DISABLE);
     }
 
-    fn op_clv(&mut self) {
+    fn clv(&mut self) {
         self.disable_flag(FLAG_OVERFLOW);
     }
 
-    fn op_cmp(&mut self, a: Addr) {
+    fn cmp(&mut self, a: Addr) {
         let v = self.read8(a);
         self.compare(self.a, v);
     }
 
-    fn op_cpx(&mut self, a: Addr) {
+    fn cpx(&mut self, a: Addr) {
         let v = self.read8(a);
         self.compare(self.x, v);
     }
 
-    fn op_cpy(&mut self, a: Addr) {
+    fn cpy(&mut self, a: Addr) {
         let v = self.read8(a);
         self.compare(self.y, v);
     }
 
-    fn op_dcp(&mut self, a: Addr) {
-        self.op_dec(a);
-        self.op_cmp(a);
+    fn dcp(&mut self, a: Addr) {
+        self.dec(a);
+        self.cmp(a);
     }
 
-    fn op_dec(&mut self, a: Addr) {
+    fn dec(&mut self, a: Addr) {
         let v = self.read8(a).wrapping_sub(1);
         self.write8(a, v);
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn op_dex(&mut self) {
+    fn dex(&mut self) {
         self.x = self.x.wrapping_sub(1);
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn op_dey(&mut self) {
+    fn dey(&mut self) {
         self.y = self.y.wrapping_sub(1);
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn op_eor(&mut self, a: Addr) {
+    fn eor(&mut self, a: Addr) {
         self.a ^= self.read8(a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_inc(&mut self, a: Addr) {
+    fn inc(&mut self, a: Addr) {
         let v = self.read8(a).wrapping_add(1);
         self.write8(a, v);
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn op_inx(&mut self) {
+    fn inx(&mut self) {
         let v = self.x.wrapping_add(1);
         self.x = v;
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn op_iny(&mut self) {
+    fn iny(&mut self) {
         let v = self.y.wrapping_add(1);
         self.y = v;
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn op_isc(&mut self, a: Addr) {
-        self.op_inc(a);
-        self.op_sbc(a);
+    fn isc(&mut self, a: Addr) {
+        self.inc(a);
+        self.sbc(a);
     }
 
-    fn op_jmp(&mut self, a: Addr) {
+    fn jmp(&mut self, a: Addr) {
         if let Addr::Mem(m) = a {
             self.pc = m;
         } else {
@@ -1669,7 +933,7 @@ impl Cpu {
         }
     }
 
-    fn op_jsr(&mut self, a: Addr) {
+    fn jsr(&mut self, a: Addr) {
         if let Addr::Mem(a) = a {
             self.push16(self.pc - 1);
             self.pc = a;
@@ -1678,7 +942,7 @@ impl Cpu {
         }
     }
 
-    fn op_lax(&mut self, a: Addr) {
+    fn lax(&mut self, a: Addr) {
         let v = self.read8(a);
         self.a = v;
         self.x = v;
@@ -1687,25 +951,25 @@ impl Cpu {
         self.update_negative(v);
     }
 
-    fn op_lda(&mut self, a: Addr) {
+    fn lda(&mut self, a: Addr) {
         self.a = self.read8(a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_ldx(&mut self, a: Addr) {
+    fn ldx(&mut self, a: Addr) {
         self.x = self.read8(a);
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn op_ldy(&mut self, a: Addr) {
+    fn ldy(&mut self, a: Addr) {
         self.y = self.read8(a);
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn op_lsr(&mut self, a: Addr) {
+    fn lsr(&mut self, a: Addr) {
         let v = self.read8(a);
         let new_v = v >> 1;
 
@@ -1716,39 +980,39 @@ impl Cpu {
         self.write8(a, new_v);
     }
 
-    fn op_nop(&mut self) {}
+    fn nop(&mut self) {}
 
-    fn op_ora(&mut self, a: Addr) {
+    fn ora(&mut self, a: Addr) {
         self.a |= self.read8(a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_pha(&mut self) {
+    fn pha(&mut self) {
         self.push8(self.a);
     }
 
-    fn op_php(&mut self) {
+    fn php(&mut self) {
         let p = self.p | FLAG_5 | FLAG_B;
         self.push8(p);
     }
 
-    fn op_pla(&mut self) {
+    fn pla(&mut self) {
         self.a = self.pop8();
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_plp(&mut self) {
+    fn plp(&mut self) {
         self.p = (self.pop8() & !FLAG_B) | FLAG_5;
     }
 
-    fn op_rla(&mut self, a: Addr) {
-        self.op_rol(a);
-        self.op_and(a);
+    fn rla(&mut self, a: Addr) {
+        self.rol(a);
+        self.and(a);
     }
 
-    fn op_rol(&mut self, a: Addr) {
+    fn rol(&mut self, a: Addr) {
         let v = self.read8(a);
         let mut new_v = v << 1;
         if self.get_flag(FLAG_CARRY) {
@@ -1762,7 +1026,7 @@ impl Cpu {
         self.write8(a, new_v);
     }
 
-    fn op_ror(&mut self, a: Addr) {
+    fn ror(&mut self, a: Addr) {
         let v = self.read8(a);
         let mut new_v = v >> 1;
         if self.get_flag(FLAG_CARRY) {
@@ -1776,26 +1040,26 @@ impl Cpu {
         self.write8(a, new_v);
     }
 
-    fn op_rra(&mut self, a: Addr) {
-        self.op_ror(a);
-        self.op_adc(a);
+    fn rra(&mut self, a: Addr) {
+        self.ror(a);
+        self.adc(a);
     }
 
-    fn op_rti(&mut self) {
+    fn rti(&mut self) {
         self.p = self.pop8() | FLAG_5;
         self.pc = self.pop16();
     }
 
-    fn op_rts(&mut self) {
+    fn rts(&mut self) {
         self.pc = self.pop16() + 1;
     }
 
-    fn op_sax(&mut self, a: Addr) {
+    fn sax(&mut self, a: Addr) {
         let v = self.a & self.x;
         self.write8(a, v);
     }
 
-    fn op_sbc(&mut self, a: Addr) {
+    fn sbc(&mut self, a: Addr) {
         let lhs = self.a as i16;
         let rhs = self.read8(a) as i16;
         let borrow = !self.get_flag(FLAG_CARRY) as i16;
@@ -1812,69 +1076,69 @@ impl Cpu {
         self.a = res8;
     }
 
-    fn op_sec(&mut self) {
+    fn sec(&mut self) {
         self.set_flag(FLAG_CARRY, true);
     }
 
-    fn op_sed(&mut self) {
+    fn sed(&mut self) {
         self.set_flag(FLAG_DECIMAL, true);
     }
 
-    fn op_sei(&mut self) {
+    fn sei(&mut self) {
         self.set_flag(FLAG_INTERRUPT_DISABLE, true);
     }
 
-    fn op_slo(&mut self, a: Addr) {
-        self.op_asl(a);
-        self.op_ora(a);
+    fn slo(&mut self, a: Addr) {
+        self.asl(a);
+        self.ora(a);
     }
 
-    fn op_sre(&mut self, a: Addr) {
-        self.op_lsr(a);
-        self.op_eor(a);
+    fn sre(&mut self, a: Addr) {
+        self.lsr(a);
+        self.eor(a);
     }
 
-    fn op_sta(&mut self, a: Addr) {
+    fn sta(&mut self, a: Addr) {
         self.write8(a, self.a);
     }
 
-    fn op_stx(&mut self, a: Addr) {
+    fn stx(&mut self, a: Addr) {
         self.write8(a, self.x);
     }
 
-    fn op_sty(&mut self, a: Addr) {
+    fn sty(&mut self, a: Addr) {
         self.write8(a, self.y);
     }
 
-    fn op_tax(&mut self) {
+    fn tax(&mut self) {
         self.x = self.a;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn op_tay(&mut self) {
+    fn tay(&mut self) {
         self.y = self.a;
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn op_tsx(&mut self) {
+    fn tsx(&mut self) {
         self.x = self.sp;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn op_txa(&mut self) {
+    fn txa(&mut self) {
         self.a = self.x;
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn op_txs(&mut self) {
+    fn txs(&mut self) {
         self.sp = self.x;
     }
 
-    fn op_tya(&mut self) {
+    fn tya(&mut self) {
         self.a = self.y;
         self.update_zero(self.a);
         self.update_negative(self.a);
