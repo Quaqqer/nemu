@@ -939,7 +939,7 @@ impl Cpu {
             }
 
             // SBC
-            0xE9 => {
+            0xE9 | 0xEB => {
                 let a = self.a_imm();
                 self.op_sbc(a);
                 self.cyc += 2;
@@ -1179,10 +1179,241 @@ impl Cpu {
                 self.cyc += 6;
             }
             0x87 => {
-                let a = self.a_ind();
-                self.pc = self.pc.wrapping_sub(1);
+                let a = self.a_zp();
                 self.op_sax(a);
                 self.cyc += 3;
+            }
+            0x8F => {
+                let a = self.a_abs();
+                self.op_sax(a);
+                self.cyc += 4;
+            }
+            0x97 => {
+                let a = self.a_zpy();
+                self.op_sax(a);
+                self.cyc += 4;
+            }
+
+            // DCP
+            0xC3 => {
+                let a = self.a_indx();
+                self.op_dcp(a);
+                self.cyc += 8;
+            }
+            0xC7 => {
+                let a = self.a_zp();
+                self.op_dcp(a);
+                self.cyc += 5;
+            }
+            0xCF => {
+                let a = self.a_abs();
+                self.op_dcp(a);
+                self.cyc += 6;
+            }
+            0xD3 => {
+                let a = self.a_indy();
+                self.op_dcp(a);
+                self.cyc += 6;
+            }
+            0xD7 => {
+                let a = self.a_zpx();
+                self.op_dcp(a);
+                self.cyc += 6;
+            }
+            0xDB => {
+                let a = self.a_absy();
+                self.op_dcp(a);
+                self.cyc += 5;
+            }
+            0xDF => {
+                let a = self.a_absx();
+                self.op_dcp(a);
+                self.cyc += 5;
+            }
+
+            // ISC
+            0xE3 => {
+                let a = self.a_indx();
+                self.op_isc(a);
+                self.cyc += 8;
+            }
+            0xE7 => {
+                let a = self.a_zp();
+                self.op_isc(a);
+                self.cyc += 5;
+            }
+            0xEF => {
+                let a = self.a_abs();
+                self.op_isc(a);
+                self.cyc += 6;
+            }
+            0xF3 => {
+                let a = self.a_indy();
+                self.op_isc(a);
+                self.cyc += 6;
+            }
+            0xF7 => {
+                let a = self.a_zpx();
+                self.op_isc(a);
+                self.cyc += 6;
+            }
+            0xFB => {
+                let a = self.a_absy();
+                self.op_isc(a);
+                self.cyc += 5;
+            }
+            0xFF => {
+                let a = self.a_absx();
+                self.op_isc(a);
+                self.cyc += 5;
+            }
+
+            // SLO
+            0x03 => {
+                let a = self.a_indx();
+                self.op_slo(a);
+                self.cyc += 8;
+            }
+            0x07 => {
+                let a = self.a_zp();
+                self.op_slo(a);
+                self.cyc += 5;
+            }
+            0x0F => {
+                let a = self.a_abs();
+                self.op_slo(a);
+                self.cyc += 6;
+            }
+            0x13 => {
+                let a = self.a_indy();
+                self.op_slo(a);
+                self.cyc += 6;
+            }
+            0x17 => {
+                let a = self.a_zpx();
+                self.op_slo(a);
+                self.cyc += 6;
+            }
+            0x1B => {
+                let a = self.a_absy();
+                self.op_slo(a);
+                self.cyc += 5;
+            }
+            0x1F => {
+                let a = self.a_absx();
+                self.op_slo(a);
+                self.cyc += 5;
+            }
+
+            // RLA
+            0x23 => {
+                let a = self.a_indx();
+                self.op_rla(a);
+                self.cyc += 8;
+            }
+            0x27 => {
+                let a = self.a_zp();
+                self.op_rla(a);
+                self.cyc += 5;
+            }
+            0x2F => {
+                let a = self.a_abs();
+                self.op_rla(a);
+                self.cyc += 6;
+            }
+            0x33 => {
+                let a = self.a_indy();
+                self.op_rla(a);
+                self.cyc += 6;
+            }
+            0x37 => {
+                let a = self.a_zpx();
+                self.op_rla(a);
+                self.cyc += 6;
+            }
+            0x3B => {
+                let a = self.a_absy();
+                self.op_rla(a);
+                self.cyc += 5;
+            }
+            0x3F => {
+                let a = self.a_absx();
+                self.op_rla(a);
+                self.cyc += 5;
+            }
+
+            // SRE
+            0x43 => {
+                let a = self.a_indx();
+                self.op_sre(a);
+                self.cyc += 8;
+            }
+            0x47 => {
+                let a = self.a_zp();
+                self.op_sre(a);
+                self.cyc += 5;
+            }
+            0x4F => {
+                let a = self.a_abs();
+                self.op_sre(a);
+                self.cyc += 6;
+            }
+            0x53 => {
+                let a = self.a_indy();
+                self.op_sre(a);
+                self.cyc += 6;
+            }
+            0x57 => {
+                let a = self.a_zpx();
+                self.op_sre(a);
+                self.cyc += 6;
+            }
+            0x5B => {
+                let a = self.a_absy();
+                self.op_sre(a);
+                self.cyc += 5;
+            }
+            0x5F => {
+                let a = self.a_absx();
+                self.op_sre(a);
+                self.cyc += 5;
+            }
+
+            // RRA
+            0x63 => {
+                let a = self.a_indx();
+                self.op_rra(a);
+                self.cyc += 8;
+            }
+            0x67 => {
+                let a = self.a_zp();
+                self.op_rra(a);
+                self.cyc += 5;
+            }
+            0x6F => {
+                let a = self.a_abs();
+                self.op_rra(a);
+                self.cyc += 6;
+            }
+            0x73 => {
+                let a = self.a_indy();
+                self.op_rra(a);
+                self.cyc += 6;
+            }
+            0x77 => {
+                let a = self.a_zpx();
+                self.op_rra(a);
+                self.cyc += 6;
+            }
+            0x7B => {
+                let a = self.a_absy();
+                self.op_rra(a);
+                self.cyc += 5;
+            }
+            0x7F => {
+                let a = self.a_absx();
+                self.op_rra(a);
+                self.cyc += 5;
             }
 
             _ => {
@@ -1229,7 +1460,7 @@ impl Cpu {
         let new_page = (new_pc / 256) as u8;
 
         if new_page != old_page {
-            2
+            1
         } else {
             0
         }
@@ -1374,6 +1605,11 @@ impl Cpu {
         self.compare(self.y, v);
     }
 
+    fn op_dcp(&mut self, a: Addr) {
+        self.op_dec(a);
+        self.op_cmp(a);
+    }
+
     fn op_dec(&mut self, a: Addr) {
         let v = self.read8(a).wrapping_sub(1);
         self.write8(a, v);
@@ -1418,6 +1654,11 @@ impl Cpu {
         self.y = v;
         self.update_zero(v);
         self.update_negative(v);
+    }
+
+    fn op_isc(&mut self, a: Addr) {
+        self.op_inc(a);
+        self.op_sbc(a);
     }
 
     fn op_jmp(&mut self, a: Addr) {
@@ -1502,6 +1743,11 @@ impl Cpu {
         self.p = (self.pop8() & !FLAG_B) | FLAG_5;
     }
 
+    fn op_rla(&mut self, a: Addr) {
+        self.op_rol(a);
+        self.op_and(a);
+    }
+
     fn op_rol(&mut self, a: Addr) {
         let v = self.read8(a);
         let mut new_v = v << 1;
@@ -1528,6 +1774,11 @@ impl Cpu {
         self.update_negative(new_v);
 
         self.write8(a, new_v);
+    }
+
+    fn op_rra(&mut self, a: Addr) {
+        self.op_ror(a);
+        self.op_adc(a);
     }
 
     fn op_rti(&mut self) {
@@ -1571,6 +1822,16 @@ impl Cpu {
 
     fn op_sei(&mut self) {
         self.set_flag(FLAG_INTERRUPT_DISABLE, true);
+    }
+
+    fn op_slo(&mut self, a: Addr) {
+        self.op_asl(a);
+        self.op_ora(a);
+    }
+
+    fn op_sre(&mut self, a: Addr) {
+        self.op_lsr(a);
+        self.op_eor(a);
     }
 
     fn op_sta(&mut self, a: Addr) {
