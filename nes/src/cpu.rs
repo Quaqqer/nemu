@@ -643,7 +643,7 @@ impl Cpu {
             0xFE => {
                 let a = self.a_absx();
                 self.op_inc(a);
-                self.cyc += 6;
+                self.cyc += 7;
             }
 
             // INX
@@ -1105,6 +1105,86 @@ impl Cpu {
                 self.cyc += 2;
             }
 
+            // Illegal opcodes
+
+            // NOP
+            0x04 | 0x44 | 0x64 => {
+                let _a = self.a_zp();
+                self.op_nop();
+                self.cyc += 3;
+            }
+            0x0c => {
+                let _a = self.a_abs();
+                self.op_nop();
+                self.cyc += 4;
+            }
+            0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
+                let a = self.a_indx();
+                self.read8(a);
+                self.op_nop();
+                self.cyc += 4;
+            }
+            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => {
+                self.op_nop();
+                self.cyc += 2;
+            }
+            0x80 => {
+                let _a = self.a_imm();
+                self.op_nop();
+                self.cyc += 2;
+            }
+            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
+                let a = self.a_absx();
+                self.read8(a);
+                self.op_nop();
+                self.cyc += 4;
+            }
+
+            // LAX
+            0xA3 => {
+                let a = self.a_indx();
+                self.op_lax(a);
+                self.cyc += 6;
+            }
+            0xA7 => {
+                let a = self.a_zp();
+                self.op_lax(a);
+                self.cyc += 3;
+            }
+            0xAF => {
+                let a = self.a_abs();
+                self.op_lax(a);
+                self.cyc += 4;
+            }
+            0xB3 => {
+                let a = self.a_indy();
+                self.op_lax(a);
+                self.cyc += 5;
+            }
+            0xB7 => {
+                let a = self.a_zpy();
+                self.op_lax(a);
+                self.cyc += 4;
+            }
+            0xBF => {
+                let a = self.a_absy();
+                self.op_lax(a);
+                self.cyc += 4;
+            }
+
+            // SAX
+            0x83 => {
+                let a = self.a_indx();
+                self.op_sax(a);
+                self.cyc += 6;
+            }
+            0x87 => {
+                let a = self.a_ind();
+                self.pc = self.pc.wrapping_sub(1);
+                self.op_sax(a);
+                self.cyc += 3;
+            }
+
             _ => {
                 #[cfg(debug_assertions)]
                 panic!("OPCODE {:#04x} not yet implemented", opcode);
@@ -1357,6 +1437,15 @@ impl Cpu {
         }
     }
 
+    fn op_lax(&mut self, a: Addr) {
+        let v = self.read8(a);
+        self.a = v;
+        self.x = v;
+
+        self.update_zero(v);
+        self.update_negative(v);
+    }
+
     fn op_lda(&mut self, a: Addr) {
         self.a = self.read8(a);
         self.update_zero(self.a);
@@ -1448,6 +1537,11 @@ impl Cpu {
 
     fn op_rts(&mut self) {
         self.pc = self.pop16() + 1;
+    }
+
+    fn op_sax(&mut self, a: Addr) {
+        let v = self.a & self.x;
+        self.write8(a, v);
     }
 
     fn op_sbc(&mut self, a: Addr) {
