@@ -99,7 +99,7 @@ impl Cpu {
         u16::from_le_bytes([l, r])
     }
 
-    fn read_mem16_sp(&self, addr: u16) -> u16 {
+    fn read_mem16_pw(&self, addr: u16) -> u16 {
         let l = self.read_mem8(addr);
         let r = self.read_mem8((addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
         u16::from_le_bytes([l, r])
@@ -123,12 +123,6 @@ impl Cpu {
                 self.rom.write8(addr - 0x4020, val);
             }
         }
-    }
-
-    fn write_mem16(&mut self, addr: u16, val: u16) {
-        let [l, r] = val.to_le_bytes();
-        self.write_mem8(addr, l);
-        self.write_mem8(addr.wrapping_add(1), r);
     }
 
     fn init(&mut self) {
@@ -185,95 +179,60 @@ impl Cpu {
     fn fetch_addr(&mut self, m: AddrMode) -> Addr {
         use AddrMode::*;
         match m {
-            Acc => self.a_acc(),
-            Imm => self.a_imm(),
-            ZP => self.a_zp(),
-            ZPX => self.a_zpx(),
-            ZPY => self.a_zpy(),
-            Rel => self.a_rel(),
-            Abs => self.a_abs(),
-            AbsX => self.a_absx(),
-            AbsY => self.a_absy(),
-            Ind => self.a_ind(),
-            IndX => self.a_indx(),
-            IndY => self.a_indy(),
-        }
-    }
+            Acc => Addr::A,
+            Imm => Addr::Val(self.fetch8()),
+            ZP => Addr::Mem(self.fetch8() as u16),
+            ZPX => Addr::Mem(self.fetch8().wrapping_add(self.x) as u16),
+            ZPY => Addr::Mem(self.fetch8().wrapping_add(self.y) as u16),
+            Rel => Addr::Rel(self.fetch8() as i8),
+            Abs => Addr::Mem(self.fetch16()),
+            AbsX => {
+                let abs = self.fetch16();
+                let a = abs.wrapping_add(self.x as u16);
 
-    fn a_acc(&mut self) -> Addr {
-        Addr::A
-    }
+                if a & 0xFF < abs & 0xFF {
+                    Addr::MemPC(a)
+                } else {
+                    Addr::Mem(a)
+                }
+            }
+            AbsY => {
+                let abs = self.fetch16();
+                let a = abs.wrapping_add(self.y as u16);
 
-    fn a_imm(&mut self) -> Addr {
-        Addr::Val(self.fetch8())
-    }
+                if a & 0xFF < abs & 0xFF {
+                    Addr::MemPC(a)
+                } else {
+                    Addr::Mem(a)
+                }
+            }
+            Ind => {
+                let a = self.fetch16();
+                let a = self.read_mem16_pw(a);
+                Addr::Mem(a)
+            }
+            IndX => {
+                let a = self.fetch8().wrapping_add(self.x);
+                let a = u16::from_le_bytes([
+                    self.read_mem8(a as u16),
+                    self.read_mem8(a.wrapping_add(1) as u16),
+                ]);
+                Addr::Mem(a)
+            }
+            IndY => {
+                let a = self.fetch8() as u16;
+                let abs = u16::from_le_bytes([
+                    self.read_mem8(a),
+                    self.read_mem8(a.wrapping_add(1) & 0xFF),
+                ]);
+                let a = abs.wrapping_add(self.y as u16);
 
-    fn a_zp(&mut self) -> Addr {
-        Addr::Mem(self.fetch8() as u16)
-    }
-
-    fn a_zpx(&mut self) -> Addr {
-        Addr::Mem(self.fetch8().wrapping_add(self.x) as u16)
-    }
-
-    fn a_zpy(&mut self) -> Addr {
-        Addr::Mem(self.fetch8().wrapping_add(self.y) as u16)
-    }
-
-    fn a_rel(&mut self) -> Addr {
-        Addr::Rel(self.fetch8() as i8)
-    }
-
-    fn a_abs(&mut self) -> Addr {
-        Addr::Mem(self.fetch16())
-    }
-
-    fn a_absx(&mut self) -> Addr {
-        let abs = self.fetch16();
-        let a = abs.wrapping_add(self.x as u16);
-
-        if a & 0xFF < abs & 0xFF {
-            Addr::MemPC(a)
-        } else {
-            Addr::Mem(a)
-        }
-    }
-
-    fn a_absy(&mut self) -> Addr {
-        let abs = self.fetch16();
-        let a = abs.wrapping_add(self.y as u16);
-
-        if a & 0xFF < abs & 0xFF {
-            Addr::MemPC(a)
-        } else {
-            Addr::Mem(a)
-        }
-    }
-
-    fn a_ind(&mut self) -> Addr {
-        let a = self.fetch16();
-        let a = self.read_mem16_sp(a);
-        Addr::Mem(a)
-    }
-
-    fn a_indx(&mut self) -> Addr {
-        let a = self.fetch8().wrapping_add(self.x);
-        let a = u16::from_le_bytes([
-            self.read_mem8(a as u16),
-            self.read_mem8(a.wrapping_add(1) as u16),
-        ]);
-        Addr::Mem(a)
-    }
-
-    fn a_indy(&mut self) -> Addr {
-        let a = self.fetch8() as u16;
-        let abs = u16::from_le_bytes([self.read_mem8(a), self.read_mem8(a.wrapping_add(1) & 0xFF)]);
-        let a = abs.wrapping_add(self.y as u16);
-
-        if a & 0xFF < abs & 0xFF {
-            Addr::MemPC(a)
-        } else {
-            Addr::Mem(a)
+                if a & 0xFF < abs & 0xFF {
+                    Addr::MemPC(a)
+                } else {
+                    Addr::Mem(a)
+                }
+            }
         }
     }
 
@@ -289,15 +248,6 @@ impl Cpu {
                 self.read_mem8(a)
             }
             Addr::Rel(_) => unreachable!(),
-        }
-    }
-
-    fn read16(&self, addr: Addr) -> u16 {
-        match addr {
-            Addr::Mem(a) => self.read_mem16(a),
-            Addr::Val(_) | Addr::A | Addr::X | Addr::Y | Addr::Rel(_) | Addr::MemPC(_) => {
-                unreachable!()
-            }
         }
     }
 
@@ -584,29 +534,29 @@ impl Cpu {
 
             // NOP
             0x04 | 0x44 | 0x64 => {
-                let _a = self.a_zp();
+                let _a = self.fetch_addr(ZP);
                 self.nop();
                 self.cyc += 3;
             }
             0x0c => {
-                let _a = self.a_abs();
+                let _a = self.fetch_addr(Abs);
                 self.nop();
                 self.cyc += 4;
             }
             0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
-                let a = self.a_indx();
+                let a = self.fetch_addr(IndX);
                 self.read8(a);
                 self.nop();
                 self.cyc += 4;
             }
             0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => op!(self, nop, 2),
             0x80 => {
-                let _a = self.a_imm();
+                let _a = self.fetch_addr(Imm);
                 self.nop();
                 self.cyc += 2;
             }
             0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
-                let a = self.a_absx();
+                let a = self.fetch_addr(AbsX);
                 self.read8(a);
                 self.nop();
                 self.cyc += 4;
@@ -758,6 +708,8 @@ impl Cpu {
         let r = self.pop8();
         u16::from_le_bytes([l, r])
     }
+
+    // Operations
 
     fn adc(&mut self, a: Addr) {
         let lhs = self.a as u16;
