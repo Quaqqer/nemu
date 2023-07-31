@@ -1,4 +1,4 @@
-pub struct Rom {
+pub struct Cart {
     prg_pages: u8,
     prg: Vec<u8>,
     prg_ram: Vec<u8>,
@@ -17,7 +17,7 @@ enum TvSystem {
     Dual,
 }
 
-impl Rom {
+impl Cart {
     pub fn read_ines1_0(path: &str) -> Self {
         let bin = std::fs::read(path).unwrap();
         assert!(bin[0..4] == [0x4E, 0x45, 0x53, 0x1A]);
@@ -89,22 +89,22 @@ enum Mapper {
 }
 
 impl Mapper {
-    pub fn read8(&self, rom: &Rom, addr: u16) -> u8 {
+    pub fn read8(&self, cart: &Cart, addr: u16) -> u8 {
         match self {
             Mapper::NES1_0 => match addr {
                 0x0..=0x5FFF => 0,
-                0x6000..=0x7FFF => rom.prg_ram[(addr as usize - 0x6000) % rom.prg_ram.len()],
-                0x8000..=0xFFFF => rom.prg[(addr as usize - 0x8000) % rom.prg.len()],
+                0x6000..=0x7FFF => cart.prg_ram[(addr as usize - 0x6000) % cart.prg_ram.len()],
+                0x8000..=0xFFFF => cart.prg[(addr as usize - 0x8000) % cart.prg.len()],
             },
         }
     }
 
-    pub fn write8(&self, rom: &mut Rom, addr: u16, val: u8) {
+    pub fn write8(&self, cart: &mut Cart, addr: u16, val: u8) {
         match self {
             Mapper::NES1_0 => match addr {
                 0x6000..=0x7FFF => {
-                    let prg_ram_size = rom.prg_ram.len();
-                    rom.prg_ram[(addr as usize - 0x6000) % prg_ram_size] = val;
+                    let prg_ram_size = cart.prg_ram.len();
+                    cart.prg_ram[(addr as usize - 0x6000) % prg_ram_size] = val;
                 }
                 _ => {}
             },

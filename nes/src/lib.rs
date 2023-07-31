@@ -2,5 +2,8 @@
 
 mod cpu;
 mod nes;
-mod rom;
+mod cart;
 mod test;
+mod bus;
+mod ppu;
+mod apu;

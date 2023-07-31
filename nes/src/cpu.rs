@@ -1,4 +1,4 @@
-use crate::rom::Rom;
+use crate::{bus::Bus, cart::Cart};
 
 pub struct Cpu {
     pub a: u8,
@@ -11,10 +11,8 @@ pub struct Cpu {
     pub cyc: u32,
 
     pub ram: [u8; 0x800],
-    pub ppu_registers: [u8; 0x8],
-    pub apu_registers: [u8; 0x18],
 
-    pub rom: Rom,
+    pub bus: Bus,
 }
 
 const FLAG_CARRY: u8 = 1 << 0;
@@ -84,12 +82,12 @@ impl Cpu {
     fn read_mem8(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
-            0x2000..=0x3FFF => self.ppu_registers[(addr as usize - 0x2000) % 0x8],
-            0x4000..=0x4017 => self.apu_registers[addr as usize - 0x4000],
+            0x2000..=0x3FFF => self.bus.ppu.read_register(addr),
+            0x4000..=0x4017 => self.bus.apu.read_register(addr),
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
-            0x4020..=0xFFFF => self.rom.read8(addr),
+            0x4020..=0xFFFF => self.bus.cart.read8(addr),
         }
     }
 
@@ -111,16 +109,16 @@ impl Cpu {
                 self.ram[addr as usize % 0x800] = val;
             }
             0x2000..=0x3FFF => {
-                self.ppu_registers[(addr as usize - 0x2000) % 0x8] = val;
+                self.bus.ppu.write_register(addr, val);
             }
             0x4000..=0x4017 => {
-                self.apu_registers[addr as usize - 0x4000] = val;
+                self.bus.apu.write_register(addr, val);
             }
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
             0x4020..=0xFFFF => {
-                self.rom.write8(addr - 0x4020, val);
+                self.bus.cart.write8(addr - 0x4020, val);
             }
         }
     }
@@ -133,15 +131,10 @@ impl Cpu {
     pub fn reset(&mut self) {
         self.sp = self.sp.wrapping_sub(3);
         self.p |= FLAG_INTERRUPT_DISABLE;
-        self.apu_registers[0x15] = 0x00;
-        // TODO: APU triangle phase is reset to 0
-        // TODO: APU DPCM output ANDed with 1 (upper 6 bits cleared)
+        self.bus.reset();
     }
 
-    pub fn new(rom: Rom) -> Self {
-        // TODO: All 15 bits of noise channel LSFR = $0000
-        // TODO: APU Frame Counter
-
+    pub fn new(cart: Cart) -> Self {
         let mut cpu = Self {
             a: 0,
             x: 0,
@@ -153,10 +146,8 @@ impl Cpu {
             cyc: 7,
 
             ram: [0x00; 0x800],
-            ppu_registers: [0x00; 0x8],
-            apu_registers: [0x00; 0x18],
 
-            rom,
+            bus: Bus::new(cart),
         };
 
         cpu.init();

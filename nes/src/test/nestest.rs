@@ -1,4 +1,4 @@
-use crate::{cpu::Cpu, rom::Rom};
+use crate::{cpu::Cpu, cart::Cart};
 
 #[derive(PartialEq)]
 struct LogEntry {
@@ -48,7 +48,7 @@ fn run_nestest() {
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let mut cpu = Cpu::new(Rom::read_ines1_0("../roms/nestest/nestest.nes"));
+    let mut cpu = Cpu::new(Cart::read_ines1_0("../roms/nestest/nestest.nes"));
     cpu.pc = 0xC000;
 
     for (i, expected) in parse_log(&log_lines).iter().enumerate() {
