@@ -11,18 +11,21 @@ pub struct Ppu {
     ppuctrl: u8,
     ppumask: u8,
     oamaddr: u8,
-    oamdata: u8,
-    ppuscroll: Latch16,
-    ppuaddr: Latch16,
+    latch: u8,
+    latch_toggle: bool,
+    ppuscroll: u16,
+    ppuaddr: u16,
     ppudata: u8,
     oamdma: u8,
 
-    oam: [u8; 256],
+    pub oam: [u8; 256],
     odd: bool,
 
     vblank: bool,
     sprite_0_hit: bool,
     sprite_overflow: bool,
+
+    cyc: u64,
 }
 
 struct Latch16 {
@@ -72,9 +75,10 @@ impl Ppu {
             ppuctrl: 0x00,
             ppumask: 0x00,
             oamaddr: 0x00,
-            oamdata: 0x00,
-            ppuscroll: Latch16::new(0x0000),
-            ppuaddr: Latch16::new(0x0000),
+            latch: 0x00,
+            latch_toggle: false,
+            ppuscroll: 0x0000,
+            ppuaddr: 0x0000,
             ppudata: 0x00,
             oamdma: 0x00,
 
@@ -84,21 +88,29 @@ impl Ppu {
             vblank: true,
             sprite_0_hit: false,
             sprite_overflow: true,
+
+            cyc: 0,
         }
     }
 
-    pub fn read_register(&self, addr: u16) -> u8 {
+    pub fn read_register(&mut self, addr: u16) -> u8 {
         if addr == 0x4014 {
             0
         } else {
             match (addr - 0x2000) % 0x8 {
                 0x0 => 0,
                 0x1 => 0,
-                0x2 => self.ppustatus(),
+                0x2 => {
+                    let status = self.ppustatus();
+                    self.vblank = false;
+                    self.latch = 0x00;
+                    self.latch_toggle = false;
+                    status
+                }
                 0x3 => 0,
-                0x4 => self.oamdata,
-                0x5 => self.ppuscroll.read_latch(),
-                0x6 => self.ppuaddr.read_latch(),
+                0x4 => self.oam[self.oamaddr as usize],
+                0x5 => self.latch,
+                0x6 => self.latch,
                 0x7 => self.ppudata,
                 _ => unreachable!(),
             }
@@ -114,9 +126,27 @@ impl Ppu {
                 0x1 => self.ppumask = v,
                 0x2 => {}
                 0x3 => self.oamaddr = v,
-                0x4 => self.oamdata = v,
-                0x5 => self.ppuscroll.write(v),
-                0x6 => self.ppuaddr.write(v),
+                0x4 => {
+                    self.oam[self.oamaddr as usize] = v;
+                    self.oamaddr = self.oamaddr.wrapping_add(1);
+                }
+                0x5 => {
+                    if self.latch_toggle {
+                        self.ppuscroll = ((self.latch as u16) << 8) + v as u16;
+                    } else {
+                        self.latch = v;
+                    }
+                    self.latch_toggle = !self.latch_toggle;
+                }
+                0x6 => {
+                    if self.latch_toggle {
+                        self.ppuaddr = ((self.latch as u16) << 8) + v as u16;
+                    } else {
+                        self.latch = v;
+                    }
+                    self.latch_toggle = !self.latch_toggle;
+                }
+
                 0x7 => self.ppudata = v,
                 _ => unreachable!(),
             }
@@ -124,16 +154,42 @@ impl Ppu {
     }
 
     fn ppustatus(&self) -> u8 {
-        todo!()
+        let mut v: u8 = 0x00;
+        if self.sprite_overflow {
+            v |= 1 << 5;
+        }
+        if self.sprite_0_hit {
+            v |= 1 << 6;
+        }
+        if self.vblank {
+            v |= 1 << 7;
+        }
+        v
     }
 
     pub fn reset(&mut self) {
         self.ppuctrl = 0x00;
         self.ppumask = 0x00;
-        self.ppuscroll.reset(0x0000);
-        self.ppuaddr.reset_latch();
+        self.ppuscroll = 0x0000;
+        self.latch = 0x00;
+        self.latch_toggle = false;
         self.ppudata = 0x00;
 
         self.odd = false;
+    }
+
+    fn vblank(&mut self) {
+        self.sprite_0_hit = false;
+    }
+
+    fn cycle(&mut self) {
+        match self.cyc {
+            257..=320 => {
+                self.oamaddr = 0x00;
+            }
+            _ => {}
+        }
+
+        self.cyc += 1;
     }
 }

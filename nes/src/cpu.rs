@@ -79,7 +79,7 @@ enum AddrMode {
 }
 
 impl Cpu {
-    fn read_mem8(&self, addr: u16) -> u8 {
+    fn read_mem8(&mut self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
             0x2000..=0x3FFF => self.bus.ppu.read_register(addr),
@@ -91,13 +91,13 @@ impl Cpu {
         }
     }
 
-    fn read_mem16(&self, addr: u16) -> u16 {
+    fn read_mem16(&mut self, addr: u16) -> u16 {
         let l = self.read_mem8(addr);
         let r = self.read_mem8(addr.wrapping_add(1));
         u16::from_le_bytes([l, r])
     }
 
-    fn read_mem16_pw(&self, addr: u16) -> u16 {
+    fn read_mem16_pw(&mut self, addr: u16) -> u16 {
         let l = self.read_mem8(addr);
         let r = self.read_mem8((addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
         u16::from_le_bytes([l, r])
@@ -110,6 +110,9 @@ impl Cpu {
             }
             0x2000..=0x3FFF => {
                 self.bus.ppu.write_register(addr, val);
+            }
+            0x4014 => {
+                self.oam_dma(val);
             }
             0x4000..=0x4017 => {
                 self.bus.apu.write_register(addr, val);
@@ -698,6 +701,16 @@ impl Cpu {
         let l = self.pop8();
         let r = self.pop8();
         u16::from_le_bytes([l, r])
+    }
+
+    pub fn oam_dma(&mut self, v: u8) {
+        // Either 513 or 514 depending if on a put or write cycle, hard to implement
+        self.cyc += 514;
+        let mut mem_i = (v as u16) << 8;
+        for i in 0..256 {
+            self.bus.ppu.oam[i] = self.ram[mem_i as usize];
+            mem_i += 1;
+        }
     }
 
     // Operations
