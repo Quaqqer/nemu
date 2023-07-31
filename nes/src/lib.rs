@@ -7,3 +7,4 @@ mod test;
 mod bus;
 mod ppu;
 mod apu;
+mod emulator;
