@@ -1,3 +1,4 @@
+#[allow(unused)]
 use crate::{cart::Cart, cpu::Cpu};
 
 #[derive(PartialEq)]

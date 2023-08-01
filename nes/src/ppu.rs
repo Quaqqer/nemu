@@ -170,10 +170,10 @@ impl Ppu {
         self.cyc += 1;
     }
 
-    fn read_mem(&mut self, addr: u16) -> u8 {
+    fn read_mem(&mut self, _addr: u16) -> u8 {
         todo!()
     }
-    fn write_mem(&mut self, addr: u16, v: u8) {
+    fn write_mem(&mut self, _addr: u16, _v: u8) {
         todo!()
     }
 
