@@ -266,6 +266,8 @@ impl Cpu {
 
         use AddrMode::*;
 
+        let prev_cyc = self.cyc;
+
         match opcode {
             // ADC
             0x69 => op!(self, adc, Imm, 2),
@@ -629,6 +631,10 @@ impl Cpu {
                 panic!("OPCODE {:#04x} not yet implemented", opcode);
             }
         };
+
+        for _ in 0..self.cyc - prev_cyc {
+            self.bus.ppu.cycle();
+        }
     }
 
     fn get_flag(&self, mask: u8) -> bool {
@@ -708,7 +714,7 @@ impl Cpu {
         self.cyc += 514;
         let mut mem_i = (v as u16) << 8;
         for i in 0..256 {
-            self.bus.ppu.oam[i] = self.ram[mem_i as usize];
+            self.bus.ppu.oam[i] = self.read_mem8(mem_i);
             mem_i += 1;
         }
     }

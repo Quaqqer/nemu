@@ -1,6 +1,6 @@
 const CTRL_X: u8 = 1 << 0;
 const CTRL_Y: u8 = 1 << 1;
-const CTRL_VRAM: u8 = 1 << 2;
+const CTRL_INCREMENT: u8 = 1 << 2;
 const CTRL_SPRITE_ADDRESS: u8 = 1 << 3;
 const CTRL_BACKGROUND: u8 = 1 << 4;
 const CTRL_SPRITE_SIZE: u8 = 1 << 5;
@@ -15,9 +15,10 @@ pub struct Ppu {
     latch_toggle: bool,
     ppuscroll: u16,
     ppuaddr: u16,
-    ppudata: u8,
     oamdma: u8,
 
+    vram: [u8; 0x800],
+    palette: [u8; 32],
     pub oam: [u8; 256],
     odd: bool,
 
@@ -26,47 +27,6 @@ pub struct Ppu {
     sprite_overflow: bool,
 
     cyc: u64,
-}
-
-struct Latch16 {
-    v: u16,
-    l: Option<u8>,
-}
-
-impl Latch16 {
-    pub fn new(v: u16) -> Self {
-        Latch16 { v, l: None }
-    }
-
-    pub fn read(&self) -> u16 {
-        self.v
-    }
-
-    pub fn read_latch(&self) -> u8 {
-        if let Some(v) = self.l {
-            v
-        } else {
-            0x00
-        }
-    }
-
-    pub fn write(&mut self, v: u8) {
-        if let Some(v_) = self.l {
-            self.v = (v_ as u16) << 8 + v as u16;
-            self.l = None;
-        } else {
-            self.l = Some(v)
-        }
-    }
-
-    pub fn reset_latch(&mut self) {
-        self.l = None;
-    }
-
-    pub fn reset(&mut self, v: u16) {
-        self.v = v;
-        self.reset_latch();
-    }
 }
 
 impl Ppu {
@@ -79,9 +39,10 @@ impl Ppu {
             latch_toggle: false,
             ppuscroll: 0x0000,
             ppuaddr: 0x0000,
-            ppudata: 0x00,
             oamdma: 0x00,
 
+            vram: [0x00; 0x800],
+            palette: [0x00; 32],
             oam: [0x00; 256],
             odd: false,
 
@@ -111,7 +72,7 @@ impl Ppu {
                 0x4 => self.oam[self.oamaddr as usize],
                 0x5 => self.latch,
                 0x6 => self.latch,
-                0x7 => self.ppudata,
+                0x7 => self.read_ppudata(),
                 _ => unreachable!(),
             }
         }
@@ -147,7 +108,7 @@ impl Ppu {
                     self.latch_toggle = !self.latch_toggle;
                 }
 
-                0x7 => self.ppudata = v,
+                0x7 => self.write_ppudata(v),
                 _ => unreachable!(),
             }
         }
@@ -167,13 +128,29 @@ impl Ppu {
         v
     }
 
+    fn nametable_address(&self) -> u16 {
+        match self.ppuctrl & 0x03 {
+            0 => 0x2000,
+            1 => 0x2400,
+            2 => 0x2800,
+            3 => 0x2C00,
+            _ => unreachable!(),
+        }
+    }
+
+    fn ppudata_increase(&self) -> u16 {
+        match self.ppuctrl & CTRL_INCREMENT != 0 {
+            false => 1,
+            true => 32,
+        }
+    }
+
     pub fn reset(&mut self) {
         self.ppuctrl = 0x00;
         self.ppumask = 0x00;
         self.ppuscroll = 0x0000;
         self.latch = 0x00;
         self.latch_toggle = false;
-        self.ppudata = 0x00;
 
         self.odd = false;
     }
@@ -182,7 +159,7 @@ impl Ppu {
         self.sprite_0_hit = false;
     }
 
-    fn cycle(&mut self) {
+    pub fn cycle(&mut self) {
         match self.cyc {
             257..=320 => {
                 self.oamaddr = 0x00;
@@ -191,5 +168,21 @@ impl Ppu {
         }
 
         self.cyc += 1;
+    }
+
+    fn read_mem(&mut self, addr: u16) -> u8 {
+        todo!()
+    }
+    fn write_mem(&mut self, addr: u16, v: u8) {
+        todo!()
+    }
+
+    fn read_ppudata(&mut self) -> u8 {
+        self.read_mem(self.ppuaddr)
+    }
+
+    fn write_ppudata(&mut self, v: u8) {
+        self.write_mem(self.ppuaddr, v);
+        self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
     }
 }
