@@ -8,7 +8,7 @@ pub struct Cpu {
     pub sp: u8,
     pub p: u8,
 
-    pub cyc: u32,
+    pub cyc: u64,
 
     pub ram: [u8; 0x800],
 
@@ -665,7 +665,7 @@ impl Cpu {
         self.set_flag(FLAG_ZERO, v == 0);
     }
 
-    fn relative_jump(&mut self, d: i8) -> u32 {
+    fn relative_jump(&mut self, d: i8) -> u64 {
         let old_pc = self.pc;
         let new_pc = self.pc.wrapping_add_signed(d as i16);
         self.pc = new_pc;

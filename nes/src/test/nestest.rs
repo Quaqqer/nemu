@@ -1,4 +1,4 @@
-use crate::{cpu::Cpu, cart::Cart};
+use crate::{cart::Cart, cpu::Cpu};
 
 #[derive(PartialEq)]
 struct LogEntry {
@@ -8,7 +8,7 @@ struct LogEntry {
     y: u8,
     p: u8,
     sp: u8,
-    cyc: u32,
+    cyc: u64,
 }
 
 impl std::fmt::Debug for LogEntry {
