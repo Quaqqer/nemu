@@ -1,22 +1,20 @@
-use crate::{cart::Cart, cpu::Cpu};
+use crate::{bus::Bus, cart::Cart, cpu::Cpu};
 
 struct Emulator {
     cpu: Cpu,
+    bus: Bus,
 }
 
 impl<'a> Emulator {
-    pub fn headless_frame(&mut self) {
-        self.cpu.cycle();
-    }
-
-    pub fn render_frame(&mut self) -> &'a [u8] {
-        self.headless_frame();
-        todo!()
-    }
-
     pub fn new(cart: Cart) -> Self {
         Self {
-            cpu: Cpu::new(cart),
+            cpu: Cpu::new(),
+            bus: Bus::new(cart),
         }
+    }
+
+    pub fn reset(&mut self) {
+        self.cpu.reset();
+        self.bus.reset();
     }
 }

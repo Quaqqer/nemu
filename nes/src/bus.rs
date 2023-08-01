@@ -1,4 +1,4 @@
-use crate::{ppu::Ppu, cart::Cart, apu::Apu};
+use crate::{apu::Apu, cart::Cart, ppu::Ppu};
 
 pub struct Bus {
     pub cart: Cart,
