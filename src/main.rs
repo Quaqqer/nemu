@@ -1,5 +1,6 @@
 use eframe::egui::{
-    self, load::SizedTexture, Color32, ColorImage, Context, TextureHandle, TextureOptions,
+    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, FontFamily, Style,
+    TextureHandle, TextureOptions, Vec2,
 };
 use egui::Id;
 
@@ -34,6 +35,8 @@ struct NemuApp {
 
 impl NemuApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        cc.egui_ctx.set_fonts(Self::create_fonts());
+
         let tex = cc.egui_ctx.load_texture(
             "tex",
             ColorImage::new([256, 240], Color32::BLACK),
@@ -69,6 +72,25 @@ impl NemuApp {
             cpu_debug_open: false,
             pattern_tables_open: false,
         }
+    }
+
+    fn create_fonts() -> FontDefinitions {
+        let mut fonts = egui::FontDefinitions::default();
+        fonts.font_data.insert(
+            "Cozette".to_string(),
+            egui::FontData::from_static(include_bytes!("../res/CozetteVector.ttf")),
+        );
+        fonts
+            .families
+            .get_mut(&egui::FontFamily::Proportional)
+            .unwrap()
+            .insert(0, "Cozette".to_string());
+        fonts
+            .families
+            .get_mut(&egui::FontFamily::Monospace)
+            .unwrap()
+            .insert(0, "Cozette".to_string());
+        fonts
     }
 }
 
@@ -204,12 +226,12 @@ impl NemuApp {
                             let tile_y = y / 8;
 
                             let base = (tile_y * 16 + tile_x) * 16;
-                            let pixel_l = (chr[base + y % 8] >> (7 - x % 8)) & 0x1;
-                            let pixel_r = (chr[base + 8 + y % 8] >> (7 - x % 8)) & 0x1;
+                            let pixel_l = (chr[offset + base + y % 8] >> (7 - x % 8)) & 0x1;
+                            let pixel_r = (chr[offset + base + 8 + y % 8] >> (7 - x % 8)) & 0x1;
                             let pixel = (pixel_r << 1) | pixel_l;
 
                             let color = match pixel {
-                                0 => Color32::RED,
+                                0 => Color32::BLACK,
                                 1 => Color32::GREEN,
                                 2 => Color32::BLUE,
                                 3 => Color32::WHITE,
@@ -234,8 +256,10 @@ impl NemuApp {
                         ..Default::default()
                     },
                 );
+                let pt1_image = egui::Image::from_texture(SizedTexture::from(&self.pt1))
+                    .fit_to_exact_size(Vec2::new(256., 256.));
 
-                let pt2_img = read_tiles(0x0000);
+                let pt2_img = read_tiles(0x1000);
                 self.pt2.set(
                     pt2_img,
                     TextureOptions {
@@ -243,9 +267,13 @@ impl NemuApp {
                         ..Default::default()
                     },
                 );
+                let pt2_image = egui::Image::from_texture(SizedTexture::from(&self.pt2))
+                    .fit_to_exact_size(Vec2::new(256., 256.));
 
-                ui.image(&self.pt1);
-                ui.image(&self.pt2);
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                    ui.add(pt1_image);
+                    ui.add(pt2_image);
+                });
             });
     }
 }

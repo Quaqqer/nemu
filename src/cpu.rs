@@ -655,7 +655,7 @@ impl Cpu {
         };
 
         for _ in 0..self.cyc - prev_cyc {
-            self.bus.ppu.tick();
+            self.bus.ppu.cycle();
         }
     }
 

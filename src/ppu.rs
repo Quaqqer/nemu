@@ -26,6 +26,11 @@ pub struct Ppu {
     sprite_0_hit: bool,
     sprite_overflow: bool,
 
+    scanline: u16,
+    col: u16,
+
+    nmi: bool,
+
     cyc: u64,
 
     display: Display,
@@ -51,6 +56,11 @@ impl Ppu {
             vblank: true,
             sprite_0_hit: false,
             sprite_overflow: true,
+
+            scanline: 0,
+            col: 0,
+
+            nmi: false,
 
             cyc: 0,
 
