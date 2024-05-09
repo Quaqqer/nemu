@@ -1,9 +1,9 @@
 pub struct Cart {
-    prg_pages: u8,
-    prg: Vec<u8>,
-    prg_ram: Vec<u8>,
-    chr: Vec<u8>,
-    mapper: Mapper,
+    pub prg_pages: u8,
+    pub prg: Vec<u8>,
+    pub prg_ram: Vec<u8>,
+    pub chr: Vec<u8>,
+    pub mapper: Mapper,
 }
 
 enum Mirroring {
@@ -114,7 +114,7 @@ impl Mapper {
     fn from_number(n: u8) -> Self {
         match n {
             0 => Self::NES1_0,
-            _ => todo!(),
+            _ => todo!("Mapper number {} is not implemented yet", n),
         }
     }
 }

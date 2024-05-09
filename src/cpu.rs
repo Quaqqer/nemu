@@ -91,6 +91,18 @@ impl Cpu {
         }
     }
 
+    pub fn read_mem8_safe(&self, addr: u16) -> Option<u8> {
+        match addr {
+            0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
+            0x2000..=0x3FFF => None,
+            0x4000..=0x4017 => None,
+            0x4018..=0x401F => {
+                unimplemented!("APU and I/O functionality that is normally disabled.")
+            }
+            0x4020..=0xFFFF => Some(self.bus.cart.read8(addr)),
+        }
+    }
+
     fn read_mem16(&mut self, addr: u16) -> u16 {
         let l = self.read_mem8(addr);
         let r = self.read_mem8(addr.wrapping_add(1));

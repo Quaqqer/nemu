@@ -212,20 +212,39 @@ impl Ppu {
 }
 
 pub struct Display {
-    pixels: [u8; 3 * 341 * 262],
+    pub pixels: [u8; Self::WIDTH * Self::HEIGHT * 3],
 }
 
 impl Display {
+    pub const WIDTH: usize = 256;
+    pub const HEIGHT: usize = 240;
+
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
-            pixels: [0x0; 3 * 341 * 262],
+            pixels: [0x0; Self::WIDTH * Self::HEIGHT * 3],
         }
     }
 
+    pub fn get_pixel(&self, x: usize, y: usize) -> (u8, u8, u8) {
+        assert!(x < Self::WIDTH);
+        assert!(y < Self::HEIGHT);
+        let base = ((y * Self::WIDTH) + x) * 3;
+
+        let r = self.pixels[base];
+        let g = self.pixels[base + 1];
+        let b = self.pixels[base + 2];
+        (r, g, b)
+    }
+
     pub fn set_pixel(&mut self, x: usize, y: usize, rgb: (u8, u8, u8)) {
+        assert!(x < Self::WIDTH);
+        assert!(y < Self::HEIGHT);
+        let base = ((y * Self::WIDTH) + x) * 3;
+
         let (r, g, b) = rgb;
-        self.pixels[(y * 341 + x) * 3] = r;
-        self.pixels[(y * 341 + x) * 3 + 1] = g;
-        self.pixels[(y * 341 + x) * 3 + 2] = b;
+        self.pixels[base] = r;
+        self.pixels[base + 1] = g;
+        self.pixels[base + 2] = b;
     }
 }

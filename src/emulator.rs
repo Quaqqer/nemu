@@ -1,7 +1,7 @@
 use crate::{cart::Cart, cpu::Cpu, ppu};
 
 pub struct Emulator {
-    cpu: Cpu,
+    pub cpu: Cpu,
 }
 
 impl Emulator {
