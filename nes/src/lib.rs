@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
-mod cpu;
-mod nes;
-mod cart;
+pub mod apu;
+pub mod bus;
+pub mod cart;
+pub mod cpu;
+pub mod emulator;
+pub mod nes;
+pub mod ppu;
 mod test;
-mod bus;
-mod ppu;
-mod apu;
-mod emulator;

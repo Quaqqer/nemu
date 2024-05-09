@@ -1,17 +1,12 @@
-use crate::{cart::Cart, cpu::Cpu};
+use crate::{cart::Cart, cpu::Cpu, ppu};
 
-struct Emulator {
+pub struct Emulator {
     cpu: Cpu,
 }
 
-impl<'a> Emulator {
-    pub fn headless_frame(&mut self) {
-        self.cpu.tick();
-    }
-
-    pub fn render_frame(&mut self) -> &'a [u8] {
-        self.headless_frame();
-        todo!()
+impl Emulator {
+    pub fn render_frame(&mut self) -> &ppu::Display {
+        self.cpu.frame()
     }
 
     pub fn new(cart: Cart) -> Self {

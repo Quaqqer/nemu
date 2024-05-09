@@ -27,6 +27,8 @@ pub struct Ppu {
     sprite_overflow: bool,
 
     cyc: u64,
+
+    display: Display,
 }
 
 impl Ppu {
@@ -51,6 +53,8 @@ impl Ppu {
             sprite_overflow: true,
 
             cyc: 0,
+
+            display: Display::new(),
         }
     }
 
@@ -160,6 +164,10 @@ impl Ppu {
     }
 
     pub fn tick(&mut self) {
+        let line = self.line();
+        let col = self.col();
+
+        // match (line, col) {}
         match self.cyc {
             257..=320 => {
                 self.oamaddr = 0x00;
@@ -168,6 +176,14 @@ impl Ppu {
         }
 
         self.cyc += 1;
+    }
+
+    pub fn line(&self) -> u64 {
+        (self.cyc % (341 * 262)) / 341
+    }
+
+    pub fn col(&self) -> u64 {
+        (self.cyc % (341 * 262)) % 341
     }
 
     fn read_mem(&mut self, _addr: u16) -> u8 {
@@ -184,5 +200,32 @@ impl Ppu {
     fn write_ppudata(&mut self, v: u8) {
         self.write_mem(self.ppuaddr, v);
         self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
+    }
+
+    pub fn cycle(&self) -> u64 {
+        self.cyc
+    }
+
+    pub fn display(&self) -> &Display {
+        &self.display
+    }
+}
+
+pub struct Display {
+    pixels: [u8; 3 * 341 * 262],
+}
+
+impl Display {
+    pub fn new() -> Self {
+        Self {
+            pixels: [0x0; 3 * 341 * 262],
+        }
+    }
+
+    pub fn set_pixel(&mut self, x: usize, y: usize, rgb: (u8, u8, u8)) {
+        let (r, g, b) = rgb;
+        self.pixels[(y * 341 + x) * 3] = r;
+        self.pixels[(y * 341 + x) * 3 + 1] = g;
+        self.pixels[(y * 341 + x) * 3 + 2] = b;
     }
 }

@@ -1,4 +1,4 @@
-use crate::{bus::Bus, cart::Cart};
+use crate::{bus::Bus, cart::Cart, ppu::Display};
 
 pub struct Cpu {
     pub a: u8,
@@ -259,6 +259,16 @@ impl Cpu {
             Addr::Mem(a) | Addr::MemPC(a) => self.write_mem8(a, v),
             Addr::Val(_) | Addr::Rel(_) => unreachable!(),
         }
+    }
+
+    pub fn frame(&mut self) -> &Display {
+        let wanted = self.bus.ppu.cycle() - (self.bus.ppu.cycle() % (341 * 262)) + 341 * 262;
+
+        while self.bus.ppu.cycle() < wanted {
+            self.tick();
+        }
+
+        self.bus.ppu.display()
     }
 
     pub fn tick(&mut self) {
@@ -1118,5 +1128,14 @@ impl Cpu {
         } else {
             unreachable!()
         }
+    }
+
+    fn nmi_interrupt(&mut self) {
+        self.push16(self.pc);
+        let flags = self.p | FLAG_B;
+        self.push8(flags);
+        self.set_flag(FLAG_INTERRUPT_DISABLE, true);
+        self.pc = self.read_mem16(0xfffa);
+        // TODO: Might want to do two ppu cycles here?
     }
 }
