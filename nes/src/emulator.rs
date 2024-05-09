@@ -6,7 +6,7 @@ struct Emulator {
 
 impl<'a> Emulator {
     pub fn headless_frame(&mut self) {
-        self.cpu.cycle();
+        self.cpu.tick();
     }
 
     pub fn render_frame(&mut self) -> &'a [u8] {

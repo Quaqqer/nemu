@@ -86,6 +86,6 @@ fn run_nestest() {
             );
         }
 
-        cpu.cycle();
+        cpu.tick();
     }
 }

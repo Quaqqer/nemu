@@ -261,7 +261,7 @@ impl Cpu {
         }
     }
 
-    pub fn cycle(&mut self) {
+    pub fn tick(&mut self) {
         let opcode = self.fetch8();
 
         use AddrMode::*;
@@ -633,7 +633,7 @@ impl Cpu {
         };
 
         for _ in 0..self.cyc - prev_cyc {
-            self.bus.ppu.cycle();
+            self.bus.ppu.tick();
         }
     }
 

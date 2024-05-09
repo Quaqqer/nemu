@@ -159,7 +159,7 @@ impl Ppu {
         self.sprite_0_hit = false;
     }
 
-    pub fn cycle(&mut self) {
+    pub fn tick(&mut self) {
         match self.cyc {
             257..=320 => {
                 self.oamaddr = 0x00;
