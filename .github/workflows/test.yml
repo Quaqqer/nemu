@@ -1,13 +1,9 @@
 name: Test
 
-on: [ push, pull_request ]
+on: [push, pull_request]
 
 env:
   CARGO_TERM_COLOR: always
-
-defaults:
-  run:
-    working-directory: ./nes
 
 jobs:
   test:
@@ -51,4 +47,3 @@ jobs:
       - run: rustup default nightly
       - run: rustup component add clippy
       - run: cargo clippy --all-targets --all-features
-

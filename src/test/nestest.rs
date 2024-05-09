@@ -26,7 +26,7 @@ impl std::fmt::Debug for LogEntry {
     }
 }
 
-fn parse_log(lines: &Vec<String>) -> Vec<LogEntry> {
+fn parse_log(lines: &[String]) -> Vec<LogEntry> {
     lines
         .iter()
         .map(|line| LogEntry {
@@ -43,13 +43,13 @@ fn parse_log(lines: &Vec<String>) -> Vec<LogEntry> {
 
 #[test]
 fn run_nestest() {
-    let log_lines = std::fs::read_to_string("../roms/nestest/nestest.log")
+    let log_lines = std::fs::read_to_string("roms/nestest/nestest.log")
         .unwrap()
         .lines()
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let mut cpu = Cpu::new(Cart::read_ines1_0("../roms/nestest/nestest.nes"));
+    let mut cpu = Cpu::new(Cart::read_ines1_0("roms/nestest/nestest.nes"));
     cpu.pc = 0xC000;
 
     for (i, expected) in parse_log(&log_lines).iter().enumerate() {

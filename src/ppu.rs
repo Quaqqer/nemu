@@ -164,16 +164,16 @@ impl Ppu {
     }
 
     pub fn tick(&mut self) {
-        let line = self.line();
-        let col = self.col();
+        let _line = self.line();
+        let _col = self.col();
 
         // match (line, col) {}
-        match self.cyc {
-            257..=320 => {
-                self.oamaddr = 0x00;
-            }
-            _ => {}
-        }
+        // match self.cyc {
+        //     257..=320 => {
+        //         self.oamaddr = 0x00;
+        //     }
+        //     _ => {}
+        // }
 
         self.cyc += 1;
     }

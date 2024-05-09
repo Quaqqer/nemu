@@ -11,8 +11,8 @@ struct Args {
 async fn main() {
     let args = Args::parse();
 
-    let mut emu = nes::emulator::Emulator::new(nes::cart::Cart::read_ines1_0(&args.nes_rom));
-    let disp = emu.render_frame();
+    let mut emu = nemu::emulator::Emulator::new(nemu::cart::Cart::read_ines1_0(&args.nes_rom));
+    let _disp = emu.render_frame();
 
     loop {
         clear_background(BLACK);
@@ -32,10 +32,6 @@ fn window_conf() -> macroquad::window::Conf {
         window_title: "Nemu".to_string(),
         window_width: 341,
         window_height: 262,
-        platform: miniquad::conf::Platform {
-            linux_backend: miniquad::conf::LinuxBackend::WaylandWithX11Fallback,
-            ..Default::default()
-        },
         ..Default::default()
     }
 }
