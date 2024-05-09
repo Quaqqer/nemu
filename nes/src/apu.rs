@@ -23,6 +23,5 @@ impl Apu {
 
     pub fn read_register(&self, addr: u16) -> u8 {
         self.registers[addr as usize - 0x4000]
-
     }
 }
