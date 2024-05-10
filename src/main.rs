@@ -1,6 +1,10 @@
+#![feature(let_chains)]
+
+use std::collections::{HashMap, VecDeque};
+
 use eframe::egui::{
-    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, FontFamily, Style,
-    TextureHandle, TextureOptions, Vec2,
+    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, TextureHandle,
+    TextureOptions, Vec2,
 };
 use egui::Id;
 
@@ -21,12 +25,18 @@ fn main() {
     .expect("Shouldn't just crash?");
 }
 
+const OP_HISTORY_LIMIT: usize = 10;
+
 struct NemuApp {
     // Emulator stuff
     emulator: Option<nemu::emulator::Emulator>,
+    paused: bool,
     tex: TextureHandle,
     pt1: TextureHandle,
     pt2: TextureHandle,
+
+    // Disassembler
+    op_history: VecDeque<String>,
 
     // UI State
     cpu_debug_open: bool,
@@ -65,9 +75,12 @@ impl NemuApp {
 
         Self {
             emulator: None,
+            paused: false,
             tex,
             pt1,
             pt2,
+
+            op_history: Default::default(),
 
             cpu_debug_open: false,
             pattern_tables_open: false,
@@ -96,7 +109,9 @@ impl NemuApp {
 
 impl eframe::App for NemuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(emu) = self.emulator.as_mut() {
+        if let Some(emu) = self.emulator.as_mut()
+            && !self.paused
+        {
             let frame = emu.render_frame();
             self.tex.set(
                 ColorImage::from_rgb([256, 240], &frame.pixels),
@@ -123,8 +138,33 @@ impl eframe::App for NemuApp {
                                         path.to_str().expect("Should be convertible to str"),
                                     ),
                                 ));
+                                self.paused = false;
                             }
                         };
+
+                        if ui.button("Open paused").clicked() {
+                            let path = rfd::FileDialog::new()
+                                .add_filter("NES", &["nes"])
+                                .pick_file();
+
+                            if let Some(path) = path {
+                                self.emulator = Some(nemu::emulator::Emulator::new(
+                                    nemu::cart::Cart::read_ines1_0(
+                                        path.to_str().expect("Should be convertible to str"),
+                                    ),
+                                ));
+                                self.paused = true;
+                            }
+                        };
+                    });
+
+                    ui.menu_button("Emulation", |ui| {
+                        if ui
+                            .button(if self.paused { "Resume" } else { "Pause" })
+                            .clicked()
+                        {
+                            self.paused = !self.paused;
+                        }
                     });
 
                     ui.menu_button("Debug", |ui| {
@@ -138,13 +178,6 @@ impl eframe::App for NemuApp {
                 });
             },
         );
-
-        egui::SidePanel::new(egui::panel::Side::Right, Id::new("Sidebar")).show(ctx, |ui| {
-            ui.label("Hello there1");
-            ui.label("Hello there2");
-            ui.label("Hello there3");
-            ui.label("Hello there4");
-        });
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {
@@ -200,8 +233,87 @@ impl NemuApp {
                     ui.end_row();
 
                     ui.label("OP");
-                    ui.label(format!("{:#02x}", cpu.read_mem8_safe(cpu.pc).unwrap()));
+                    ui.label(format!("{:#02x}", cpu.inspect_mem8(cpu.pc).unwrap()));
                     ui.end_row();
+                });
+
+                egui::scroll_area::ScrollArea::new([false, true]).show(ui, |ui| {
+                    for history_label in &self.op_history {
+                        ui.label(history_label);
+                    }
+
+                    let mut offset = emu.cpu.pc;
+                    for i in 0..10 {
+                        if let Some(opcode) = emu.cpu.inspect_mem8(emu.cpu.pc) {
+                            let (op, addr_mode, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
+
+                            let read_8 = |base: u16, offset: u16| {
+                                emu.cpu
+                                    .inspect_mem8(base.wrapping_add(offset))
+                                    .map(|v| format!("{:#02x}", v))
+                                    .unwrap_or("??".to_string())
+                            };
+
+                            let read_16 = |base: u16, offset: u16| {
+                                emu.cpu
+                                    .inspect_mem16(base.wrapping_add(offset))
+                                    .map(|v| format!("{:#04x}", v))
+                                    .unwrap_or("????".to_string())
+                            };
+
+                            let addr_format = match addr_mode {
+                                nemu::op::AddrMode::Imp => "{{IMP}}".to_string(),
+                                nemu::op::AddrMode::Acc => "A {{ACC}}".to_string(),
+                                nemu::op::AddrMode::Imm => {
+                                    format!("#{} {{IMM}}", read_8(offset, 1))
+                                }
+                                nemu::op::AddrMode::Zp0 => format!("{} {{ZP}}", read_8(offset, 1)),
+                                nemu::op::AddrMode::ZpX => {
+                                    format!("{},x {{ZPX}}", read_8(offset, 1))
+                                }
+                                nemu::op::AddrMode::ZpY => {
+                                    format!("{},y {{ZPY}}", read_8(offset, 1))
+                                }
+                                nemu::op::AddrMode::Abs => {
+                                    format!("{} {{ABS}}", read_16(offset, 1))
+                                }
+                                nemu::op::AddrMode::AbX => {
+                                    format!("{},x {{ABX}}", read_16(offset, 1))
+                                }
+                                nemu::op::AddrMode::AbY => {
+                                    format!("{},y {{ABY}}", read_16(offset, 1))
+                                }
+                                nemu::op::AddrMode::Rel => {
+                                    format!("{} {{REL}}", read_8(offset, 1))
+                                }
+                                nemu::op::AddrMode::Ind => {
+                                    format!("{} {{IND}}", read_16(offset, 1))
+                                }
+                                nemu::op::AddrMode::IdX => {
+                                    format!("{},x {{IDX}}", read_16(offset, 1))
+                                }
+                                nemu::op::AddrMode::IdY => {
+                                    format!("{},y {{IDY}}", read_16(offset, 1))
+                                }
+                            };
+
+                            let s = format!("${:#04x}: {} {}", offset, op, addr_format);
+
+                            offset = offset
+                                .wrapping_add(1)
+                                .wrapping_add(addr_mode.fetched_bytes() as u16);
+
+                            if i == 0 {
+                                self.op_history.push_back(s.clone());
+
+                                if self.op_history.len() > OP_HISTORY_LIMIT {
+                                    self.op_history.pop_front();
+                                }
+                            }
+
+                            ui.label(s);
+                        }
+                    }
                 });
             });
     }

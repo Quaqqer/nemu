@@ -37,6 +37,7 @@ pub struct Ppu {
 }
 
 impl Ppu {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Ppu {
             ppuctrl: 0x00,
@@ -174,8 +175,8 @@ impl Ppu {
     }
 
     pub fn tick(&mut self) {
-        let _line = self.line();
-        let _col = self.col();
+        let line = self.line();
+        let col = self.col();
 
         // match (line, col) {}
         // match self.cyc {
@@ -200,11 +201,14 @@ impl Ppu {
         todo!()
     }
     fn write_mem(&mut self, _addr: u16, _v: u8) {
-        todo!()
+        // TODO: Should probably do something
     }
 
     fn read_ppudata(&mut self) -> u8 {
-        self.read_mem(self.ppuaddr)
+        let v = self.read_mem(self.ppuaddr);
+        self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
+
+        v
     }
 
     fn write_ppudata(&mut self, v: u8) {

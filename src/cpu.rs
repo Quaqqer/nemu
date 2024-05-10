@@ -91,7 +91,7 @@ impl Cpu {
         }
     }
 
-    pub fn read_mem8_safe(&self, addr: u16) -> Option<u8> {
+    pub fn inspect_mem8(&self, addr: u16) -> Option<u8> {
         match addr {
             0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
             0x2000..=0x3FFF => None,
@@ -107,6 +107,18 @@ impl Cpu {
         let l = self.read_mem8(addr);
         let r = self.read_mem8(addr.wrapping_add(1));
         u16::from_le_bytes([l, r])
+    }
+
+    pub fn inspect_mem16(&self, addr: u16) -> Option<u16> {
+        let l = self.inspect_mem8(addr);
+        let r = self.inspect_mem8(addr.wrapping_add(1));
+        if let Some(l) = l
+            && let Some(r) = r
+        {
+            Some(u16::from_le_bytes([l, r]))
+        } else {
+            None
+        }
     }
 
     fn read_mem16_pw(&mut self, addr: u16) -> u16 {
@@ -278,6 +290,10 @@ impl Cpu {
 
         while self.bus.ppu.cycle() < wanted {
             self.tick();
+
+            for _ in 0..3 {
+                self.bus.ppu.tick();
+            }
         }
 
         self.bus.ppu.display()
@@ -649,7 +665,6 @@ impl Cpu {
             0x7F => op!(self, rra, AbsX, 5),
 
             _ => {
-                #[cfg(debug_assertions)]
                 panic!("OPCODE {:#04x} not yet implemented", opcode);
             }
         };
@@ -721,8 +736,7 @@ impl Cpu {
 
     fn pop8(&mut self) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        let v = self.read_mem8(0x0100 + self.sp as u16);
-        v
+        self.read_mem8(0x0100 + self.sp as u16)
     }
 
     fn pop16(&mut self) -> u16 {
