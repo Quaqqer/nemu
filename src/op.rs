@@ -1,3 +1,4 @@
+#[derive(Debug, Clone, Copy)]
 pub enum Op {
     Adc,
     And,
@@ -163,32 +164,39 @@ impl std::fmt::Display for Op {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum AddrMode {
-    /// The instruction knows where to look, no special fetch required
+    /// No argument (implicit)
     Imp,
-    /// The accumulator
+    /// Accumulator
     Acc,
-    /// The next byte from the memory
+    /// Adress `pc + 1`
     Imm,
-    /// Fetch from zero page
+    /// Adress `fetch8()`
     Zp0,
-    /// Fetch from zero page offset by X
+    /// Adress `(fetch8() + x) & 0xFF`
     ZpX,
-    /// Fetch from zero page offset by Y
+    /// Adress `(fetch8() + y) & 0xFF`
     ZpY,
-    /// Fetch from 16 bit address
+    /// Adress `fetch16()`
     Abs,
-    /// Fetch from 16 bit address offset by X
+    /// Adress `fetch16() + x`
     AbX,
-    /// Fetch from 16 bit address offset by Y
+    /// Adress `fetch16() + y`
     AbY,
-    /// Fetch relative from the PC, offset by signed 8 bit value
+    /// Adress `(i8)fetch8() + pc`
     Rel,
-    /// Indirect jump, fetch 16 byte address, look at that address and jump to the value
+    /// Adress `mem16_pw(fetch16())`
+    ///
+    /// The page wraps at the end, see `Cpu::read_mem16_pw`
     Ind,
-    /// The address stored at mem[fetch8()+X]
+    /// Address `mem16_pw((fetch8() + x) & 0xFF)`
+    ///
+    /// The page wraps at the end, see `Cpu::read_mem16_pw`.
     IdX,
-    /// The address stored at mem[fetch8()]+Y
+    /// Address `mem16_pw(fetch8())`
+    ///
+    /// The page wraps at the end, see `Cpu::read_mem16_pw`.
     IdY,
 }
 

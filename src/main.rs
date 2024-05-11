@@ -206,6 +206,8 @@ impl NemuApp {
                     return;
                 };
 
+                let cpu = &emu.cpu;
+
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
                     let cpu = &emu.cpu;
                     ui.label("PC");
@@ -242,9 +244,9 @@ impl NemuApp {
                         ui.label(history_label);
                     }
 
-                    let mut offset = emu.cpu.pc;
+                    let mut offset = cpu.pc;
                     for i in 0..10 {
-                        if let Some(opcode) = emu.cpu.inspect_mem8(emu.cpu.pc) {
+                        if let Some(opcode) = emu.cpu.inspect_mem8(cpu.pc) {
                             let (op, addr_mode, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
 
                             let read_8 = |base: u16, offset: u16| {
