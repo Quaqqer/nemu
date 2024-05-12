@@ -21,11 +21,14 @@ impl Emulator {
             cart,
         } = self;
 
-        let cpu_cycles = self.cpu.tick(&mut CpuBus { apu, ppu, cart });
+        while !ppu.frame_end {
+            let cpu_cycles = self.cpu.tick(&mut CpuBus { apu, ppu, cart });
 
-        for _ in 0..cpu_cycles * 3 {
-            self.ppu.cycle(cart);
+            for _ in 0..cpu_cycles * 3 {
+                ppu.cycle(cart);
+            }
         }
+        ppu.frame_end = false;
 
         self.ppu.display()
     }

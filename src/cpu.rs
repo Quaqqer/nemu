@@ -830,7 +830,6 @@ impl Cpu {
         }
     }
 
-    #[allow(unused)]
     fn nmi_interrupt(&mut self, bus: &mut CpuBus) {
         self.push16(bus, self.pc);
         let flags = self.p | P::B;

@@ -6,7 +6,9 @@ pub struct PpuCtrl(u8);
 
 bitflags! {
     impl PpuCtrl: u8 {
+        /// The 9th bit of the x-coordinate of the scroll
         const X                 = 0b00000001;
+        /// The 9th bit of the y-coordinate of the scroll
         const Y                 = 0b00000010;
         const NAMETABLE_ADDRESS = 0b00000011;
         const INCREMENT         = 0b00000100;
@@ -80,6 +82,7 @@ pub struct Ppu {
     next_pt: u16,
 
     nmi: bool,
+    pub frame_end: bool,
 
     display: Display,
 }
@@ -114,6 +117,7 @@ impl Ppu {
             next_pt: 0,
 
             nmi: false,
+            frame_end: false,
 
             display: Display::new(),
         }
@@ -238,7 +242,47 @@ impl Ppu {
     }
 
     pub fn cycle(&mut self, cart: &Cart) {
-        // Fetch data
+        let screen_x = self.col;
+        let screen_y = self.scanline;
+
+        if self.col % 8 == 0 {
+            self.nt = self.next_nt;
+            self.at = self.next_at;
+            self.pt = self.next_pt;
+        }
+
+        let pt_x = self.col
+            + (if self.ppuctrl.intersects(PpuCtrl::X) {
+                0x100
+            } else {
+                0x0
+            })
+            + (self.ppuscroll >> 8);
+
+        let pt_y = self.scanline
+            + (if self.ppuctrl.intersects(PpuCtrl::Y) {
+                0x100
+            } else {
+                0x0
+            })
+            + (self.ppuscroll & 0xFF);
+
+        let pt_tile_x = pt_x / 8;
+        let pt_tile_y = pt_y / 8;
+
+        if self.col < 256 && self.scanline < 240 {
+            let color = match rand::random::<u8>() & 0b11 {
+                0 => (0, 0, 0),
+                1 => (125, 0, 0),
+                2 => (0, 125, 0),
+                3 => (0, 0, 125),
+                _ => unreachable!(),
+            };
+            self.display
+                .set_pixel(self.col as usize, self.scanline as usize, color);
+        }
+
+        // Fetches
         match self.col % 8 {
             1 => {
                 // self.next_nt = self.read_mem
@@ -260,18 +304,29 @@ impl Ppu {
             .ppumask
             .intersects(PpuMask::SHOW_BACKGROUND | PpuMask::SHOW_SPRITES);
 
-        match (self.scanline, self.col, self.odd, rendering_enabled) {
+        if self.scanline == 241 && self.col == 1 {
+            self.ppustatus |= PpuStatus::VBLANK;
+            self.frame_end = true;
+        }
+
+        if self.scanline == 261 && self.col == 1 {
+            self.ppustatus -= PpuStatus::VBLANK;
+        }
+
+        match (self.scanline, self.col, self.odd && rendering_enabled) {
             // Skip 1 cycle if odd and rendering is enabled
-            (261, 340, false, _) | (261, 339, true, true) => {
+            (261, 340, _) | (261, 339, true) => {
                 self.col = 0;
                 self.scanline = 0;
                 self.odd = !self.odd;
             }
-            (_, 340, _, _) => {
+            (_, 340, _) => {
                 self.col = 0;
                 self.scanline += 1;
             }
-            _ => {}
+            _ => {
+                self.col += 1;
+            }
         }
     }
 

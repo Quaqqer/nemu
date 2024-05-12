@@ -10,4 +10,5 @@ bitflags = "2.5.0"
 clap = { version = "4.5.4", features = ["derive"] }
 eframe = "0.27.2"
 egui_extras = "0.27.2"
+rand = "0.8.5"
 rfd = { version = "0.14.1", default-features = false, features = ["gtk3"] }
