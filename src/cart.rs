@@ -81,6 +81,51 @@ impl Cart {
         let mapper = self.mapper;
         mapper.write8(self, addr, val);
     }
+
+    pub(crate) fn reset(&self) {
+        todo!()
+    }
+
+    /// Get a slice of the 16 bytes that a sprite is contained in.
+    ///
+    /// Every pixel has 2 bits of information, the first bit is stored in the first 8 bytes, the
+    /// second bit is stored in the last 8 bytes.
+    ///
+    /// * `page`: The page, either 0 or 1
+    /// * `sprite_x`: The sprite x coordinate
+    /// * `sprite_y`: The sprite y coordinate
+    pub fn get_sprite(&self, page: u8, sprite_x: u8, sprite_y: u8) -> &[u8] {
+        debug_assert!(page <= 1);
+        debug_assert!(sprite_x <= 0xF);
+        debug_assert!(sprite_y <= 0xF);
+
+        let base = page as usize * 0x1000 + ((sprite_y as usize * 16 + sprite_x as usize) * 16);
+        &self.chr[base..base + 16]
+    }
+
+    /// Get a single pixel from a sprite
+    ///
+    /// * `page`: The page, either 0 or 1
+    /// * `sprite_x`: The sprite x-coordinate
+    /// * `sprite_y`: The sprite y-coordinate
+    /// * `x_offset`: The pixel offset
+    /// * `y_offset`: The pixel offset
+    pub fn get_sprite_pixel(
+        &self,
+        page: u8,
+        sprite_x: u8,
+        sprite_y: u8,
+        x_offset: u8,
+        y_offset: u8,
+    ) -> u8 {
+        debug_assert!(x_offset <= 0x8);
+        debug_assert!(y_offset <= 0x8);
+
+        let sprite = self.get_sprite(page, sprite_x, sprite_y);
+        let l = (sprite[y_offset as usize] >> (7 - x_offset)) & 1;
+        let r = (sprite[y_offset as usize + 8] >> (7 - x_offset)) & 1;
+        (r << 1) | l
+    }
 }
 
 #[derive(Clone, Copy)]

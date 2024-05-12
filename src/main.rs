@@ -8,6 +8,7 @@ use eframe::egui::{
     TextureOptions, Vec2,
 };
 use egui::Id;
+use nemu::{cpu::CpuBus, emulator::Emulator};
 
 fn main() {
     let native_options = eframe::NativeOptions {
@@ -199,15 +200,20 @@ impl NemuApp {
         egui::Window::new("CPU Debug")
             .open(&mut self.cpu_debug_open)
             .show(ctx, |ui| {
-                let Some(emu) = self.emulator.as_ref() else {
+                let Some(emu) = self.emulator.as_mut() else {
                     ui.label("No emulator is active");
                     return;
                 };
 
-                let cpu = &emu.cpu;
+                let Emulator {
+                    cpu,
+                    apu,
+                    ppu,
+                    cart,
+                } = emu;
+                let cpu_bus = &mut CpuBus { apu, ppu, cart };
 
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
-                    let cpu = &emu.cpu;
                     ui.label("PC");
                     ui.label(format!("{:#04x}", cpu.pc));
                     ui.end_row();
@@ -233,7 +239,10 @@ impl NemuApp {
                     ui.end_row();
 
                     ui.label("OP");
-                    ui.label(format!("{:#02x}", cpu.inspect_mem8(cpu.pc).unwrap()));
+                    ui.label(format!(
+                        "{:#02x}",
+                        cpu.inspect_mem8(cpu_bus, cpu.pc).unwrap()
+                    ));
                     ui.end_row();
                 });
 
@@ -244,55 +253,50 @@ impl NemuApp {
 
                     let mut offset = cpu.pc;
                     for i in 0..10 {
-                        if let Some(opcode) = emu.cpu.inspect_mem8(cpu.pc) {
+                        if let Some(opcode) = cpu.inspect_mem8(cpu_bus, cpu.pc) {
                             let (op, addr_mode, _, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
 
-                            let read_8 = |base: u16, offset: u16| {
-                                emu.cpu
-                                    .inspect_mem8(base.wrapping_add(offset))
-                                    .map(|v| format!("{:#02x}", v))
-                                    .unwrap_or("??".to_string())
-                            };
+                            macro_rules! read_8(($base:expr, $offset:expr) => {
+                                cpu.inspect_mem8(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("{:02x}", v)).unwrap_or("??".to_string())
+                            });
 
-                            let read_16 = |base: u16, offset: u16| {
-                                emu.cpu
-                                    .inspect_mem16(base.wrapping_add(offset))
-                                    .map(|v| format!("{:#04x}", v))
-                                    .unwrap_or("????".to_string())
-                            };
+                            macro_rules! read_16(($base:expr, $offset:expr) => {
+                                cpu.inspect_mem16(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("{:04x}", v)).unwrap_or("????".to_string())
+                            });
+
 
                             let addr_format = match addr_mode {
                                 nemu::op::AddrMode::Acc => "A {{ACC}}".to_string(),
                                 nemu::op::AddrMode::Imm => {
-                                    format!("#{} {{IMM}}", read_8(offset, 1))
+                                    format!("#{} {{IMM}}", read_8!(offset, 1))
                                 }
-                                nemu::op::AddrMode::Zp0 => format!("{} {{ZP}}", read_8(offset, 1)),
+                                nemu::op::AddrMode::Zp0 => format!("{} {{ZP}}", read_8!(offset, 1)),
                                 nemu::op::AddrMode::ZpX => {
-                                    format!("{},x {{ZPX}}", read_8(offset, 1))
+                                    format!("{},x {{ZPX}}", read_8!(offset, 1))
                                 }
                                 nemu::op::AddrMode::ZpY => {
-                                    format!("{},y {{ZPY}}", read_8(offset, 1))
+                                    format!("{},y {{ZPY}}", read_8!(offset, 1))
                                 }
                                 nemu::op::AddrMode::Abs => {
-                                    format!("{} {{ABS}}", read_16(offset, 1))
+                                    format!("{} {{ABS}}", read_16!(offset, 1))
                                 }
                                 nemu::op::AddrMode::AbX => {
-                                    format!("{},x {{ABX}}", read_16(offset, 1))
+                                    format!("{},x {{ABX}}", read_16!(offset, 1))
                                 }
                                 nemu::op::AddrMode::AbY => {
-                                    format!("{},y {{ABY}}", read_16(offset, 1))
+                                    format!("{},y {{ABY}}", read_16!(offset, 1))
                                 }
                                 nemu::op::AddrMode::Rel => {
-                                    format!("{} {{REL}}", read_8(offset, 1))
+                                    format!("{} {{REL}}", read_8!(offset, 1))
                                 }
                                 nemu::op::AddrMode::Ind => {
-                                    format!("{} {{IND}}", read_16(offset, 1))
+                                    format!("{} {{IND}}", read_16!(offset, 1))
                                 }
                                 nemu::op::AddrMode::IdX => {
-                                    format!("{},x {{IDX}}", read_16(offset, 1))
+                                    format!("{},x {{IDX}}", read_16!(offset, 1))
                                 }
                                 nemu::op::AddrMode::IdY => {
-                                    format!("{},y {{IDY}}", read_16(offset, 1))
+                                    format!("{},y {{IDY}}", read_16!(offset, 1))
                                 }
                             };
 
@@ -328,8 +332,6 @@ impl NemuApp {
                     return;
                 };
 
-                let chr = &emu.cpu.bus.cart.chr;
-
                 let read_tiles = |page: u8| {
                     let mut buf: [u8; 128 * 128 * 3] = [0; 49152];
 
@@ -338,13 +340,9 @@ impl NemuApp {
                             let tile_x = x / 8;
                             let tile_y = y / 8;
 
-                            let pixel = emu.cpu.bus.ppu.get_sprite_pixel(
-                                page,
-                                tile_x,
-                                tile_y,
-                                x % 8,
-                                y % 8,
-                            );
+                            let pixel =
+                                emu.cart
+                                    .get_sprite_pixel(page, tile_x, tile_y, x % 8, y % 8);
 
                             let color = match pixel {
                                 0 => Color32::BLACK,

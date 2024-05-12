@@ -1,3 +1,4 @@
+use crate::{apu::Apu, cpu::CpuBus, ppu::Ppu};
 #[allow(unused)]
 use crate::{cart::Cart, cpu::Cpu};
 
@@ -49,7 +50,13 @@ fn run_nestest() {
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let mut cpu = Cpu::new(Cart::read_ines1_0("roms/nestest/nestest.nes"));
+    let cart = &mut Cart::read_ines1_0("roms/nestest/nestest.nes");
+    let mut cpu = Cpu::new();
+    let mut cpu_bus = &mut CpuBus {
+        apu: &mut Apu::new(),
+        ppu: &mut Ppu::new(),
+        cart,
+    };
 
     cpu.pc = 0xC000;
 
@@ -87,6 +94,6 @@ fn run_nestest() {
             );
         }
 
-        cpu.tick();
+        cpu.tick(cpu_bus);
     }
 }

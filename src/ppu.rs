@@ -31,16 +31,21 @@ pub struct Ppu {
     scanline: u16,
     col: u16,
 
+    nt: u8,
+    at: u8,
+    pt: u16,
+    next_nt: u8,
+    next_at: u8,
+    next_pt: u16,
+
     nmi: bool,
 
     display: Display,
-
-    chr: Vec<u8>,
 }
 
 impl Ppu {
     #[allow(clippy::new_without_default)]
-    pub fn new(cart: &Cart) -> Self {
+    pub fn new() -> Self {
         Ppu {
             ppuctrl: 0x00,
             ppumask: 0x00,
@@ -63,11 +68,16 @@ impl Ppu {
             scanline: 0,
             col: 0,
 
+            nt: 0,
+            at: 0,
+            pt: 0,
+            next_nt: 0,
+            next_at: 0,
+            next_pt: 0,
+
             nmi: false,
 
             display: Display::new(),
-
-            chr: cart.chr.clone(),
         }
     }
 
@@ -176,14 +186,24 @@ impl Ppu {
         self.sprite_0_hit = false;
     }
 
-    pub fn tick(&mut self) {
-        // match (line, col) {}
-        // match self.cyc {
-        //     257..=320 => {
-        //         self.oamaddr = 0x00;
-        //     }
-        //     _ => {}
-        // }
+    pub fn cycle(&mut self, cart: &Cart) {
+        // Fetch data
+        match self.col % 8 {
+            1 => {
+                // self.next_nt = self.read_mem
+            }
+            3 => {
+                // TODO: Fetch palette
+                // self.next_at = todo!();
+            }
+            5 => {
+                // self.next_pt_l = todo!();
+            }
+            7 => {
+                // self.next_pt_h = todo!();
+            }
+            _ => {}
+        }
 
         match (self.scanline, self.col, self.odd) {
             (261, 339, false) | (261, 340, true) => {
@@ -220,47 +240,6 @@ impl Ppu {
 
     pub fn display(&self) -> &Display {
         &self.display
-    }
-
-    /// Get a slice of the 16 bytes that a sprite is contained in.
-    ///
-    /// Every pixel has 2 bits of information, the first bit is stored in the first 8 bytes, the
-    /// second bit is stored in the last 8 bytes.
-    ///
-    /// * `page`: The page, either 0 or 1
-    /// * `sprite_x`: The sprite x coordinate
-    /// * `sprite_y`: The sprite y coordinate
-    pub fn get_sprite(&self, page: u8, sprite_x: u8, sprite_y: u8) -> &[u8] {
-        debug_assert!(page <= 1);
-        debug_assert!(sprite_x <= 0xF);
-        debug_assert!(sprite_y <= 0xF);
-
-        let base = page as usize * 0x1000 + ((sprite_y as usize * 16 + sprite_x as usize) * 16);
-        &self.chr[base..base + 16]
-    }
-
-    /// Get a single pixel from a sprite
-    ///
-    /// * `page`: The page, either 0 or 1
-    /// * `sprite_x`: The sprite x-coordinate
-    /// * `sprite_y`: The sprite y-coordinate
-    /// * `x_offset`: The pixel offset
-    /// * `y_offset`: The pixel offset
-    pub fn get_sprite_pixel(
-        &self,
-        page: u8,
-        sprite_x: u8,
-        sprite_y: u8,
-        x_offset: u8,
-        y_offset: u8,
-    ) -> u8 {
-        debug_assert!(x_offset <= 0x8);
-        debug_assert!(y_offset <= 0x8);
-
-        let sprite = self.get_sprite(page, sprite_x, sprite_y);
-        let l = (sprite[y_offset as usize] >> (7 - x_offset)) & 1;
-        let r = (sprite[y_offset as usize + 8] >> (7 - x_offset)) & 1;
-        (r << 1) | l
     }
 }
 
