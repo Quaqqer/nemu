@@ -1,4 +1,4 @@
-#![allow(clippy::new_without_default)]
+#![allow(clippy::new_without_default, clippy::single_match)]
 #![feature(let_chains)]
 
 use std::collections::VecDeque;

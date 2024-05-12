@@ -59,7 +59,7 @@ impl Cpu {
     fn read_mem8(&mut self, bus: &mut CpuBus, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
-            0x2000..=0x3FFF => bus.ppu.read_register(addr),
+            0x2000..=0x3FFF => bus.ppu.read_register(bus.cart, addr),
             0x4000..=0x4017 => bus.apu.read_register(addr),
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
@@ -116,7 +116,7 @@ impl Cpu {
                 self.ram[addr as usize % 0x800] = val;
             }
             0x2000..=0x3FFF => {
-                bus.ppu.write_register(addr, val);
+                bus.ppu.write_register(bus.cart, addr, val);
             }
             0x4014 => {
                 self.oam_dma(bus, val);
@@ -144,7 +144,7 @@ impl Cpu {
     }
 
     pub fn new() -> Self {
-        let mut cpu = Self {
+        Self {
             a: 0,
             x: 0,
             y: 0,
@@ -155,9 +155,7 @@ impl Cpu {
             cyc: 7,
 
             ram: [0x00; 0x800],
-        };
-
-        cpu
+        }
     }
 
     fn fetch8(&mut self, bus: &mut CpuBus) -> u8 {

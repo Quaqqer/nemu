@@ -19,9 +19,9 @@ pub struct Ppu {
     ppuaddr: u16,
     oamdma: u8,
 
-    vram: [u8; 0x800],
-    palette: [u8; 32],
-    pub oam: [u8; 256],
+    pub vram: [u8; 0x800],
+    palette: [u8; 0x20],
+    pub oam: [u8; 0x100],
     odd: bool,
 
     vblank: bool,
@@ -81,7 +81,7 @@ impl Ppu {
         }
     }
 
-    pub fn read_register(&mut self, addr: u16) -> u8 {
+    pub fn read_register(&mut self, cart: &mut Cart, addr: u16) -> u8 {
         if addr == 0x4014 {
             0
         } else {
@@ -99,13 +99,13 @@ impl Ppu {
                 0x4 => self.oam[self.oamaddr as usize],
                 0x5 => self.latch,
                 0x6 => self.latch,
-                0x7 => self.read_ppudata(),
+                0x7 => self.read_ppudata(cart),
                 _ => unreachable!(),
             }
         }
     }
 
-    pub fn write_register(&mut self, addr: u16, v: u8) {
+    pub fn write_register(&mut self, cart: &mut Cart, addr: u16, v: u8) {
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
@@ -135,7 +135,7 @@ impl Ppu {
                     self.latch_toggle = !self.latch_toggle;
                 }
 
-                0x7 => self.write_ppudata(v),
+                0x7 => self.write_ppudata(cart, v),
                 _ => unreachable!(),
             }
         }
@@ -219,22 +219,61 @@ impl Ppu {
         }
     }
 
-    fn read_mem(&mut self, _addr: u16) -> u8 {
-        todo!()
-    }
-    fn write_mem(&mut self, _addr: u16, _v: u8) {
-        // TODO: Should probably do something
+    fn read_mem(&mut self, cart: &mut Cart, addr: u16) -> u8 {
+        match addr {
+            // Pattern tables
+            0x0000..=0x0FFF => cart.read_pattern_table(self, 0, addr % 0x1000),
+            0x1000..=0x1FFF => cart.read_pattern_table(self, 1, addr % 0x1000),
+            // Name tables
+            0x2000..=0x23FF => cart.read_nametable(self, 0, (addr - 0x2000) % 0x400),
+            0x2400..=0x27FF => cart.read_nametable(self, 1, (addr - 0x2400) % 0x400),
+            0x2800..=0x2BFF => cart.read_nametable(self, 2, (addr - 0x2800) % 0x400),
+            0x2C00..=0x2FFF => cart.read_nametable(self, 3, (addr - 0x2c00) % 0x400),
+            // Unused address, do nothing for now
+            // TODO: Mapped by cartridge
+            0x3000..=0x3EFF => 0,
+            // Palette ram indexes, mirrored every 0x20 values
+            0x3F00..=0x3F1F => self.palette[(addr % 0x20) as usize],
+
+            _ => unreachable!(
+                "Address ${:#04x} is outside of the address space for the PPU",
+                addr
+            ),
+        }
     }
 
-    fn read_ppudata(&mut self) -> u8 {
-        let v = self.read_mem(self.ppuaddr);
+    fn write_mem(&mut self, cart: &mut Cart, addr: u16, v: u8) {
+        match addr {
+            // Pattern tables
+            0x0000..=0x0FFF => cart.write_pattern_table(self, 0, addr % 0x1000, v),
+            0x1000..=0x1FFF => cart.write_pattern_table(self, 1, addr % 0x1000, v),
+            // Name tables
+            0x2000..=0x23FF => cart.write_nametable(self, 0, (addr - 0x2000) % 0x400, v),
+            0x2400..=0x27FF => cart.write_nametable(self, 1, (addr - 0x2400) % 0x400, v),
+            0x2800..=0x2BFF => cart.write_nametable(self, 2, (addr - 0x2800) % 0x400, v),
+            0x2C00..=0x2FFF => cart.write_nametable(self, 3, (addr - 0x2c00) % 0x400, v),
+            // Unused address, do nothing for now
+            // TODO: Mapped by cartridge
+            0x3000..=0x3EFF => {}
+            // Palette ram indexes, mirrored every 0x20 values
+            0x3F00..=0x3F1F => self.palette[(addr % 0x20) as usize] = v,
+
+            _ => unreachable!(
+                "Address ${:#04x} is outside of the address space for the PPU",
+                addr
+            ),
+        }
+    }
+
+    fn read_ppudata(&mut self, cart: &mut Cart) -> u8 {
+        let v = self.read_mem(cart, self.ppuaddr);
         self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
 
         v
     }
 
-    fn write_ppudata(&mut self, v: u8) {
-        self.write_mem(self.ppuaddr, v);
+    fn write_ppudata(&mut self, cart: &mut Cart, v: u8) {
+        self.write_mem(cart, self.ppuaddr, v);
         self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
     }
 

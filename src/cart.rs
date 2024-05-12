@@ -1,17 +1,20 @@
+use crate::ppu::Ppu;
+
 pub struct Cart {
     pub prg_pages: u8,
     pub prg: Vec<u8>,
     pub prg_ram: Vec<u8>,
     pub chr: Vec<u8>,
     pub mapper: Mapper,
+    pub mirroring: Mirroring,
 }
 
-enum Mirroring {
+pub enum Mirroring {
     Horizontal,
     Vertical,
 }
 
-enum TvSystem {
+pub enum TvSystem {
     NTSC,
     PAL,
     Dual,
@@ -25,7 +28,14 @@ impl Cart {
         let chr_size: usize = bin[5] as usize * 8192;
 
         let flags_6 = bin[6];
-        let _vertical_mirroring = flags_6 & 1 != 0;
+        let vertical_mirroring = flags_6 & 1 != 0;
+
+        let mirroring = if vertical_mirroring {
+            Mirroring::Vertical
+        } else {
+            Mirroring::Horizontal
+        };
+
         let _has_battery_prg_ram = flags_6 & (1 << 1) != 0;
         let has_trainer = flags_6 & (1 << 2) != 0;
         let _ignore_mirroring_control = flags_6 & (1 << 3) != 0;
@@ -70,16 +80,30 @@ impl Cart {
             chr,
             mapper,
             prg_ram,
+            mirroring,
         }
     }
 
     pub fn read8(&self, addr: u16) -> u8 {
-        self.mapper.read8(self, addr)
+        match self.mapper {
+            Mapper::NES1_0 => match addr {
+                0x0..=0x5FFF => 0,
+                0x6000..=0x7FFF => self.prg_ram[(addr as usize - 0x6000) % self.prg_ram.len()],
+                0x8000..=0xFFFF => self.prg[(addr as usize - 0x8000) % self.prg.len()],
+            },
+        }
     }
 
     pub fn write8(&mut self, addr: u16, val: u8) {
-        let mapper = self.mapper;
-        mapper.write8(self, addr, val);
+        match self.mapper {
+            Mapper::NES1_0 => match addr {
+                0x6000..=0x7FFF => {
+                    let prg_ram_size = self.prg_ram.len();
+                    self.prg_ram[(addr as usize - 0x6000) % prg_ram_size] = val;
+                }
+                _ => {}
+            },
+        }
     }
 
     pub(crate) fn reset(&self) {
@@ -126,6 +150,65 @@ impl Cart {
         let r = (sprite[y_offset as usize + 8] >> (7 - x_offset)) & 1;
         (r << 1) | l
     }
+
+    pub fn read_pattern_table(&mut self, ppu: &mut Ppu, pattern_table: u8, addr: u16) -> u8 {
+        debug_assert!(addr < 0x1000);
+        debug_assert!(pattern_table <= 1);
+
+        self.chr[0x1000 * pattern_table as usize + addr as usize]
+    }
+
+    pub fn write_pattern_table(&mut self, ppu: &mut Ppu, pattern_table: u8, addr: u16, v: u8) {
+        // TODO: Shouldn't always be readable?
+        debug_assert!(addr < 0x400);
+        debug_assert!(pattern_table <= 1);
+
+        self.chr[0x1000 * pattern_table as usize + addr as usize] = v
+    }
+
+    pub fn read_nametable(&mut self, ppu: &mut Ppu, nametable: u8, addr: u16) -> u8 {
+        debug_assert!(addr < 0x400);
+        debug_assert!(nametable <= 3);
+
+        match self.mirroring {
+            Mirroring::Horizontal => match nametable {
+                0 => ppu.vram[addr as usize],
+                1 => ppu.vram[addr as usize],
+                2 => ppu.vram[0x400 + addr as usize],
+                3 => ppu.vram[0x400 + addr as usize],
+                _ => unreachable!(),
+            },
+            Mirroring::Vertical => match nametable {
+                0 => ppu.vram[addr as usize],
+                1 => ppu.vram[0x400 + addr as usize],
+                2 => ppu.vram[addr as usize],
+                3 => ppu.vram[0x400 + addr as usize],
+                _ => unreachable!(),
+            },
+        }
+    }
+
+    pub fn write_nametable(&mut self, ppu: &mut Ppu, nametable: u8, addr: u16, v: u8) {
+        debug_assert!(addr < 0x400);
+        debug_assert!(nametable <= 3);
+
+        match self.mirroring {
+            Mirroring::Horizontal => match nametable {
+                0 => ppu.vram[addr as usize] = v,
+                1 => ppu.vram[addr as usize] = v,
+                2 => ppu.vram[0x400 + addr as usize] = v,
+                3 => ppu.vram[0x400 + addr as usize] = v,
+                _ => unreachable!(),
+            },
+            Mirroring::Vertical => match nametable {
+                0 => ppu.vram[addr as usize] = v,
+                1 => ppu.vram[0x400 + addr as usize] = v,
+                2 => ppu.vram[addr as usize] = v,
+                3 => ppu.vram[0x400 + addr as usize] = v,
+                _ => unreachable!(),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -134,28 +217,6 @@ pub enum Mapper {
 }
 
 impl Mapper {
-    pub fn read8(&self, cart: &Cart, addr: u16) -> u8 {
-        match self {
-            Mapper::NES1_0 => match addr {
-                0x0..=0x5FFF => 0,
-                0x6000..=0x7FFF => cart.prg_ram[(addr as usize - 0x6000) % cart.prg_ram.len()],
-                0x8000..=0xFFFF => cart.prg[(addr as usize - 0x8000) % cart.prg.len()],
-            },
-        }
-    }
-
-    pub fn write8(&self, cart: &mut Cart, addr: u16, val: u8) {
-        match self {
-            Mapper::NES1_0 => match addr {
-                0x6000..=0x7FFF => {
-                    let prg_ram_size = cart.prg_ram.len();
-                    cart.prg_ram[(addr as usize - 0x6000) % prg_ram_size] = val;
-                }
-                _ => {}
-            },
-        }
-    }
-
     fn from_number(n: u8) -> Self {
         match n {
             0 => Self::NES1_0,

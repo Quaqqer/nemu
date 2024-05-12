@@ -1,4 +1,4 @@
-#![allow(clippy::new_without_default, unused)]
+#![allow(clippy::new_without_default, unused, clippy::single_match)]
 #![feature(let_chains)]
 
 pub mod apu;
