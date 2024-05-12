@@ -81,7 +81,16 @@ impl Ppu {
         }
     }
 
-    pub fn read_register(&mut self, cart: &mut Cart, addr: u16) -> u8 {
+    /// Read a PPU register from the CPU.
+    ///
+    /// The PPU exposes 8 registers to the CPU, which are mirrored every 8 bytes.
+    /// Expects an address in the range of [0x2000, 0x3FFF] or 0x4014.
+    ///
+    /// * `cart`: The cart
+    /// * `addr`: The memory address
+    pub(crate) fn cpu_read_register(&mut self, cart: &mut Cart, addr: u16) -> u8 {
+        debug_assert!(0x2000 <= addr && addr < 0x4000 || addr == 0x4014);
+
         if addr == 0x4014 {
             0
         } else {
@@ -105,7 +114,17 @@ impl Ppu {
         }
     }
 
-    pub fn write_register(&mut self, cart: &mut Cart, addr: u16, v: u8) {
+    /// Write to a PPU register from the CPU.
+    ///
+    /// The PPU exposes 8 registers to the CPU, which are mirrored every 8 bytes.
+    /// Expects an address in the range of [0x2000, 0x3FFF] or 0x4014.
+    ///
+    /// * `cart`: The cart
+    /// * `addr`: The memory address
+    /// * `v`: The value
+    pub(crate) fn cpu_write_register(&mut self, cart: &mut Cart, addr: u16, v: u8) {
+        debug_assert!(0x2000 <= addr && addr < 0x4000);
+
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
@@ -268,7 +287,6 @@ impl Ppu {
     fn read_ppudata(&mut self, cart: &mut Cart) -> u8 {
         let v = self.read_mem(cart, self.ppuaddr);
         self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
-
         v
     }
 
