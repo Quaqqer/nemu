@@ -275,8 +275,6 @@ impl Cpu {
 
         self.cyc += cycles as u64;
 
-        println!("{:?} {:?} {:?} {:?}", op, addr_mode, addr, cycles);
-
         match op {
             Op::Adc => self.adc(addr),
             Op::And => self.and(addr),
@@ -334,6 +332,8 @@ impl Cpu {
             Op::Txa => self.txa(),
             Op::Txs => self.txs(),
             Op::Tya => self.tya(),
+
+            // Illegal opcodes
             Op::Ahx => self.ahx(),
             Op::Alr => self.alr(),
             Op::Anc => self.anc(),
@@ -858,46 +858,46 @@ impl Cpu {
     }
 
     fn tas(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn xaa(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn shy(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn shx(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn las(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn axs(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn kil(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn arr(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn anc(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn alr(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 
     fn ahx(&self) {
-        todo!()
+        // Illegal opcode not implemented
     }
 }
