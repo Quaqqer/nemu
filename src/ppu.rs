@@ -1,22 +1,62 @@
 use crate::cart::Cart;
 use bitflags::{bitflags, Flags};
 
+#[derive(Clone, Copy)]
+pub struct PpuCtrl(u8);
+
 bitflags! {
-    pub struct PpuCtrl: u8 {
-        const X              = 0b00000001;
-        const Y              = 0b00000010;
-        const INCREMENT      = 0b00000100;
-        const SPRITE_ADDRESS = 0b00001000;
-        const BACKGROUND     = 0b00010000;
-        const SPRITE_SIZE    = 0b00100000;
-        const MASTER_SLAVE   = 0b01000000;
-        const NMI            = 0b10000000;
+    impl PpuCtrl: u8 {
+        const X                 = 0b00000001;
+        const Y                 = 0b00000010;
+        const NAMETABLE_ADDRESS = 0b00000011;
+        const INCREMENT         = 0b00000100;
+        const SPRITE_ADDRESS    = 0b00001000;
+        const BACKGROUND        = 0b00010000;
+        const SPRITE_SIZE       = 0b00100000;
+        const MASTER_SLAVE      = 0b01000000;
+        const NMI               = 0b10000000;
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct PpuMask(u8);
+
+bitflags! {
+    impl PpuMask: u8 {
+        /// Grayscale mode
+        const GREYSCALE             = 0b00000001;
+        /// Show leftmost 8 bg pixels
+        const SHOW_LEFTMOST_BG      = 0b00000010;
+        /// Show leftmost 8 sprite pixels
+        const SHOW_LEFTMOST_SPRITES = 0b00000100;
+        const SHOW_BACKGROUND       = 0b00001000;
+        const SHOW_SPRITES          = 0b00010000;
+        const EMPH_RED              = 0b00100000;
+        const EMPH_GREEN            = 0b01000000;
+        const EMPH_BLUE             = 0b10000000;
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct PpuStatus(u8);
+bitflags! {
+    impl PpuStatus: u8 {
+        /// Stale PPU bus contents
+        const OPEN_BUS        = 0b00011111;
+        /// Sprite overflow, if more than 8 sprites are rendered on the same scanline (has false
+        /// positives and negatives)
+        const SPRITE_OVERFLOW = 0b00100000;
+        /// Set when non-zero sprite of sprite 0 overlaps with non-zero background pixel
+        const SPRITE_0_HIT    = 0b01000000;
+        /// Vertical blank started
+        const VBLANK          = 0b10000000;
     }
 }
 
 pub struct Ppu {
     ppuctrl: PpuCtrl,
-    ppumask: u8,
+    ppumask: PpuMask,
+    ppustatus: PpuStatus,
     oamaddr: u8,
     latch: u8,
     latch_toggle: bool,
@@ -28,10 +68,6 @@ pub struct Ppu {
     palette: [u8; 0x20],
     pub oam: [u8; 0x100],
     odd: bool,
-
-    vblank: bool,
-    sprite_0_hit: bool,
-    sprite_overflow: bool,
 
     scanline: u16,
     col: u16,
@@ -53,7 +89,8 @@ impl Ppu {
     pub fn new() -> Self {
         Ppu {
             ppuctrl: PpuCtrl::empty(),
-            ppumask: 0x00,
+            ppumask: PpuMask::empty(),
+            ppustatus: PpuStatus::SPRITE_OVERFLOW | PpuStatus::VBLANK,
             oamaddr: 0x00,
             latch: 0x00,
             latch_toggle: false,
@@ -65,10 +102,6 @@ impl Ppu {
             palette: [0x00; 32],
             oam: [0x00; 256],
             odd: false,
-
-            vblank: true,
-            sprite_0_hit: false,
-            sprite_overflow: true,
 
             scanline: 0,
             col: 0,
@@ -103,8 +136,8 @@ impl Ppu {
                 0x0 => 0,
                 0x1 => 0,
                 0x2 => {
-                    let status = self.ppustatus();
-                    self.vblank = false;
+                    let status = self.ppustatus.bits();
+                    self.ppustatus -= PpuStatus::VBLANK;
                     self.latch = 0x00;
                     self.latch_toggle = false;
                     status
@@ -134,8 +167,16 @@ impl Ppu {
             self.oamdma = v;
         } else {
             match (addr - 0x2000) % 0x8 {
-                0x0 => self.ppuctrl = PpuCtrl::from_bits(v).unwrap(),
-                0x1 => self.ppumask = v,
+                0x0 => {
+                    // TODO: If currently in a vblank and PPUSTATUS vblank flag is set, setting nmi
+                    // flag will generate NMI.
+                    //
+                    // Master/slave mode and EXT pins
+                    //
+                    // https://www.nesdev.org/wiki/PPU_registers#Controller_($2000)_%3E_write
+                    self.ppuctrl = PpuCtrl::from_bits(v).unwrap()
+                }
+                0x1 => self.ppumask = PpuMask::from_bits(v).unwrap(),
                 0x2 => {}
                 0x3 => self.oamaddr = v,
                 0x4 => {
@@ -165,20 +206,6 @@ impl Ppu {
         }
     }
 
-    fn ppustatus(&self) -> u8 {
-        let mut v: u8 = 0x00;
-        if self.sprite_overflow {
-            v |= 1 << 5;
-        }
-        if self.sprite_0_hit {
-            v |= 1 << 6;
-        }
-        if self.vblank {
-            v |= 1 << 7;
-        }
-        v
-    }
-
     fn nametable_address(&self) -> u16 {
         match self.ppuctrl.bits() & 0b11 {
             0 => 0x2000,
@@ -198,7 +225,7 @@ impl Ppu {
 
     pub fn reset(&mut self) {
         self.ppuctrl = PpuCtrl::empty();
-        self.ppumask = 0x00;
+        self.ppumask = PpuMask::empty();
         self.ppuscroll = 0x0000;
         self.latch = 0x00;
         self.latch_toggle = false;
@@ -207,7 +234,7 @@ impl Ppu {
     }
 
     fn vblank(&mut self) {
-        self.sprite_0_hit = false;
+        self.ppustatus -= PpuStatus::SPRITE_0_HIT;
     }
 
     pub fn cycle(&mut self, cart: &Cart) {
@@ -229,13 +256,18 @@ impl Ppu {
             _ => {}
         }
 
-        match (self.scanline, self.col, self.odd) {
-            (261, 339, false) | (261, 340, true) => {
+        let rendering_enabled = self
+            .ppumask
+            .intersects(PpuMask::SHOW_BACKGROUND | PpuMask::SHOW_SPRITES);
+
+        match (self.scanline, self.col, self.odd, rendering_enabled) {
+            // Skip 1 cycle if odd and rendering is enabled
+            (261, 340, false, _) | (261, 339, true, true) => {
                 self.col = 0;
                 self.scanline = 0;
                 self.odd = !self.odd;
             }
-            (_, 340, _) => {
+            (_, 340, _, _) => {
                 self.col = 0;
                 self.scanline += 1;
             }
