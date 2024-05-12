@@ -84,7 +84,7 @@ impl Cart {
 }
 
 #[derive(Clone, Copy)]
-enum Mapper {
+pub enum Mapper {
     NES1_0,
 }
 

@@ -1,6 +1,7 @@
+#![allow(clippy::new_without_default)]
 #![feature(let_chains)]
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use eframe::egui::{
     self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, TextureHandle,
