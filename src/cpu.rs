@@ -1,3 +1,4 @@
+use crate::op::{AddrMode, Op, OPCODE_MATRIX};
 use crate::{bus::Bus, cart::Cart, ppu::Display};
 
 pub struct Cpu {
@@ -24,18 +25,6 @@ const FLAG_5: u8 = 1 << 5;
 const FLAG_OVERFLOW: u8 = 1 << 6;
 const FLAG_NEGATIVE: u8 = 1 << 7;
 
-macro_rules! op {
-    ($cpu:expr,$op:ident,$m:expr,$d:expr) => {{
-        let a = $cpu.fetch_addr($m);
-        $cpu.$op(a);
-        $cpu.cyc += $d;
-    }};
-    ($cpu:expr,$op:ident,$d:expr) => {{
-        $cpu.$op();
-        $cpu.cyc += $d;
-    }};
-}
-
 impl std::fmt::Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Cpu")
@@ -53,28 +42,11 @@ impl std::fmt::Debug for Cpu {
 #[derive(Debug, Clone, Copy)]
 enum Addr {
     A,
-    X,
-    Y,
     Mem(u16),
     /// Memory with page crossed
     MemPC(u16),
     Rel(i8),
-}
-
-#[derive(Debug, Clone, Copy)]
-enum AddrMode {
-    Acc,
-    Imm,
-    Zp0,
-    ZpX,
-    ZpY,
-    Abs,
-    AbX,
-    AbY,
-    Rel,
-    Ind,
-    IdX,
-    IdY,
+    None,
 }
 
 impl Cpu {
@@ -199,7 +171,7 @@ impl Cpu {
         v
     }
 
-    fn fetch_addr(&mut self, m: AddrMode) -> Addr {
+    fn fetch_addr(&mut self, m: AddrMode, pc_add: bool) -> Addr {
         use AddrMode::*;
         match m {
             Acc => Addr::A,
@@ -217,7 +189,7 @@ impl Cpu {
                 let abs = self.fetch16();
                 let a = abs.wrapping_add(self.x as u16);
 
-                if a & 0xFF < abs & 0xFF {
+                if pc_add && a & 0xFF < abs & 0xFF {
                     Addr::MemPC(a)
                 } else {
                     Addr::Mem(a)
@@ -227,7 +199,7 @@ impl Cpu {
                 let abs = self.fetch16();
                 let a = abs.wrapping_add(self.y as u16);
 
-                if a & 0xFF < abs & 0xFF {
+                if pc_add && a & 0xFF < abs & 0xFF {
                     Addr::MemPC(a)
                 } else {
                     Addr::Mem(a)
@@ -248,7 +220,7 @@ impl Cpu {
                 let abs = self.read_mem16_pw(a as u16);
                 let a = abs.wrapping_add(self.y as u16);
 
-                if a & 0xFF < abs & 0xFF {
+                if pc_add && a & 0xFF < abs & 0xFF {
                     Addr::MemPC(a)
                 } else {
                     Addr::Mem(a)
@@ -260,14 +232,12 @@ impl Cpu {
     fn read8(&mut self, addr: Addr) -> u8 {
         match addr {
             Addr::A => self.a,
-            Addr::X => self.x,
-            Addr::Y => self.y,
             Addr::Mem(a) => self.read_mem8(a),
             Addr::MemPC(a) => {
                 self.cyc += 1;
                 self.read_mem8(a)
             }
-            Addr::Rel(_) => unreachable!(),
+            Addr::Rel(_) | Addr::None => unreachable!(),
         }
     }
 
@@ -276,14 +246,8 @@ impl Cpu {
             Addr::A => {
                 self.a = v;
             }
-            Addr::X => {
-                self.x = v;
-            }
-            Addr::Y => {
-                self.y = v;
-            }
             Addr::Mem(a) | Addr::MemPC(a) => self.write_mem8(a, v),
-            Addr::Rel(_) => unreachable!(),
+            Addr::None | Addr::Rel(_) => unreachable!(),
         }
     }
 
@@ -302,376 +266,96 @@ impl Cpu {
     }
 
     pub fn tick(&mut self) {
+        let start_cycle = self.cyc;
+
         let opcode = self.fetch8();
 
-        use AddrMode::*;
-
-        let prev_cyc = self.cyc;
-
-        match opcode {
-            // ADC
-            0x69 => op!(self, adc, Imm, 2),
-            0x65 => op!(self, adc, Zp0, 3),
-            0x75 => op!(self, adc, ZpX, 4),
-            0x6D => op!(self, adc, Abs, 4),
-            0x7D => op!(self, adc, AbX, 4),
-            0x79 => op!(self, adc, AbY, 4),
-            0x61 => op!(self, adc, IdX, 6),
-            0x71 => op!(self, adc, IdY, 5),
-
-            // AND
-            0x29 => op!(self, and, Imm, 2),
-            0x25 => op!(self, and, Zp0, 3),
-            0x35 => op!(self, and, ZpX, 4),
-            0x2D => op!(self, and, Abs, 4),
-            0x3D => op!(self, and, AbX, 4),
-            0x39 => op!(self, and, AbY, 4),
-            0x21 => op!(self, and, IdX, 6),
-            0x31 => op!(self, and, IdY, 5),
-
-            // ASL
-            0x0A => op!(self, asl, Acc, 2),
-            0x06 => op!(self, asl, Zp0, 5),
-            0x16 => op!(self, asl, ZpX, 6),
-            0x0E => op!(self, asl, Abs, 6),
-            0x1E => op!(self, asl, AbX, 7),
-
-            // BCC
-            0x90 => op!(self, bcc, Rel, 2),
-
-            // BCS
-            0xB0 => op!(self, bcs, Rel, 2),
-
-            // BEQ
-            0xF0 => op!(self, beq, Rel, 2),
-
-            // BIT
-            0x24 => op!(self, bit, Zp0, 3),
-            0x2C => op!(self, bit, Abs, 4),
-
-            // BMI
-            0x30 => op!(self, bmi, Rel, 2),
-
-            // BNE
-            0xD0 => op!(self, bne, Rel, 2),
-
-            // BPL
-            0x10 => op!(self, bpl, Rel, 2),
-
-            // BVC
-            0x50 => op!(self, bvc, Rel, 2),
-
-            // BVS
-            0x70 => op!(self, bvs, Rel, 2),
-
-            // CLC
-            0x18 => op!(self, clc, 2),
-
-            // CLD
-            0xD8 => op!(self, cld, 2),
-
-            // CLV
-            0xB8 => op!(self, clv, 2),
-
-            // CMP
-            0xC9 => op!(self, cmp, Imm, 2),
-            0xC5 => op!(self, cmp, Zp0, 3),
-            0xD5 => op!(self, cmp, ZpX, 4),
-            0xCD => op!(self, cmp, Abs, 4),
-            0xDD => op!(self, cmp, AbX, 4),
-            0xD9 => op!(self, cmp, AbY, 4),
-            0xC1 => op!(self, cmp, IdX, 6),
-            0xD1 => op!(self, cmp, IdY, 5),
-
-            // CPX
-            0xE0 => op!(self, cpx, Imm, 2),
-            0xE4 => op!(self, cpx, Zp0, 3),
-            0xEC => op!(self, cpx, Abs, 4),
-
-            // CPY
-            0xC0 => op!(self, cpy, Imm, 2),
-            0xC4 => op!(self, cpy, Zp0, 3),
-            0xCC => op!(self, cpy, Abs, 4),
-
-            // DEC
-            0xC6 => op!(self, dec, Zp0, 5),
-            0xD6 => op!(self, dec, ZpX, 6),
-            0xCE => op!(self, dec, Abs, 6),
-            0xDE => op!(self, dec, AbX, 7),
-
-            // DEX
-            0xCA => op!(self, dex, 2),
-
-            // DEY
-            0x88 => op!(self, dey, 2),
-
-            // EOR
-            0x49 => op!(self, eor, Imm, 2),
-            0x45 => op!(self, eor, Zp0, 3),
-            0x55 => op!(self, eor, ZpX, 4),
-            0x4D => op!(self, eor, Abs, 4),
-            0x5D => op!(self, eor, AbX, 4),
-            0x59 => op!(self, eor, AbY, 4),
-            0x41 => op!(self, eor, IdX, 6),
-            0x51 => op!(self, eor, IdY, 5),
-
-            // INC
-            0xE6 => op!(self, inc, Zp0, 5),
-            0xF6 => op!(self, inc, ZpX, 6),
-            0xEE => op!(self, inc, Abs, 6),
-            0xFE => op!(self, inc, AbX, 7),
-
-            // INX
-            0xE8 => op!(self, inx, 2),
-
-            // INY
-            0xC8 => op!(self, iny, 2),
-
-            // JMP
-            0x4C => op!(self, jmp, Abs, 3),
-            0x6C => op!(self, jmp, Ind, 5),
-
-            // JSR
-            0x20 => op!(self, jsr, Abs, 6),
-
-            // LDA
-            0xA9 => op!(self, lda, Imm, 2),
-            0xA5 => op!(self, lda, Zp0, 3),
-            0xB5 => op!(self, lda, ZpX, 4),
-            0xAD => op!(self, lda, Abs, 4),
-            0xBD => op!(self, lda, AbX, 4),
-            0xB9 => op!(self, lda, AbY, 4),
-            0xA1 => op!(self, lda, IdX, 6),
-            0xB1 => op!(self, lda, IdY, 5),
-
-            // LDX
-            0xA2 => op!(self, ldx, Imm, 2),
-            0xA6 => op!(self, ldx, Zp0, 3),
-            0xB6 => op!(self, ldx, ZpY, 4),
-            0xAE => op!(self, ldx, Abs, 4),
-            0xBE => op!(self, ldx, AbY, 4),
-
-            // LDY
-            0xA0 => op!(self, ldy, Imm, 2),
-            0xA4 => op!(self, ldy, Zp0, 3),
-            0xB4 => op!(self, ldy, ZpX, 4),
-            0xAC => op!(self, ldy, Abs, 4),
-            0xBC => op!(self, ldy, AbX, 4),
-
-            // LSR
-            0x4A => op!(self, lsr, Acc, 2),
-            0x46 => op!(self, lsr, Zp0, 5),
-            0x56 => op!(self, lsr, ZpX, 6),
-            0x4E => op!(self, lsr, Abs, 6),
-            0x5E => op!(self, lsr, AbX, 7),
-
-            // NOP
-            0xEA => op!(self, nop, 2),
-
-            // ORA
-            0x09 => op!(self, ora, Imm, 2),
-            0x05 => op!(self, ora, Zp0, 3),
-            0x15 => op!(self, ora, ZpX, 4),
-            0x0D => op!(self, ora, Abs, 4),
-            0x1D => op!(self, ora, AbX, 4),
-            0x19 => op!(self, ora, AbY, 4),
-            0x01 => op!(self, ora, IdX, 6),
-            0x11 => op!(self, ora, IdY, 5),
-
-            // PHA
-            0x48 => op!(self, pha, 3),
-
-            // PHP
-            0x08 => op!(self, php, 3),
-
-            // PLA
-            0x68 => op!(self, pla, 4),
-
-            // PLP
-            0x28 => op!(self, plp, 4),
-
-            // ROL
-            0x2A => op!(self, rol, Acc, 2),
-            0x26 => op!(self, rol, Zp0, 5),
-            0x36 => op!(self, rol, ZpX, 6),
-            0x2E => op!(self, rol, Abs, 6),
-            0x3E => op!(self, rol, AbX, 7),
-
-            // ROR
-            0x6A => op!(self, ror, Acc, 2),
-            0x66 => op!(self, ror, Zp0, 5),
-            0x76 => op!(self, ror, ZpX, 6),
-            0x6E => op!(self, ror, Abs, 6),
-            0x7E => op!(self, ror, AbX, 7),
-
-            // RTI
-            0x40 => op!(self, rti, 6),
-
-            // RTS
-            0x60 => op!(self, rts, 6),
-
-            // SBC
-            0xE9 | 0xEB => op!(self, sbc, Imm, 2),
-            0xE5 => op!(self, sbc, Zp0, 3),
-            0xF5 => op!(self, sbc, ZpX, 4),
-            0xED => op!(self, sbc, Abs, 4),
-            0xFD => op!(self, sbc, AbX, 4),
-            0xF9 => op!(self, sbc, AbY, 4),
-            0xE1 => op!(self, sbc, IdX, 6),
-            0xF1 => op!(self, sbc, IdY, 5),
-
-            // SEC
-            0x38 => op!(self, sec, 2),
-
-            // SED
-            0xF8 => op!(self, sed, 2),
-
-            // SEI
-            0x78 => op!(self, sei, 2),
-
-            // STA
-            0x85 => op!(self, sta, Zp0, 3),
-            0x95 => op!(self, sta, ZpX, 4),
-            0x8D => op!(self, sta, Abs, 4),
-            0x9D => op!(self, sta, AbX, 5),
-            0x99 => op!(self, sta, AbY, 5),
-            0x81 => op!(self, sta, IdX, 6),
-            0x91 => op!(self, sta, IdY, 6),
-
-            // STX
-            0x86 => op!(self, stx, Zp0, 3),
-            0x96 => op!(self, stx, ZpY, 4),
-            0x8E => op!(self, stx, Abs, 4),
-
-            // STY
-            0x84 => op!(self, sty, Zp0, 3),
-            0x94 => op!(self, sty, ZpX, 4),
-            0x8C => op!(self, sty, Abs, 4),
-
-            // TAX
-            0xAA => op!(self, tax, 2),
-
-            // TAY
-            0xA8 => op!(self, tay, 2),
-
-            // TSX
-            0xBA => op!(self, tsx, 2),
-
-            // TXA
-            0x8A => op!(self, txa, 2),
-
-            // TXS
-            0x9A => op!(self, txs, 2),
-
-            // TYA
-            0x98 => op!(self, tya, 2),
-
-            // Illegal opcodes
-
-            // NOP
-            0x04 | 0x44 | 0x64 => {
-                let _a = self.fetch_addr(Zp0);
-                self.nop();
-                self.cyc += 3;
-            }
-            0x0c => {
-                let _a = self.fetch_addr(Abs);
-                self.nop();
-                self.cyc += 4;
-            }
-            0x14 | 0x34 | 0x54 | 0x74 | 0xD4 | 0xF4 => {
-                let a = self.fetch_addr(IdX);
-                self.read8(a);
-                self.nop();
-                self.cyc += 4;
-            }
-            0x1A | 0x3A | 0x5A | 0x7A | 0xDA | 0xFA => op!(self, nop, 2),
-            0x80 => {
-                let _a = self.fetch_addr(Imm);
-                self.nop();
-                self.cyc += 2;
-            }
-            0x1C | 0x3C | 0x5C | 0x7C | 0xDC | 0xFC => {
-                let a = self.fetch_addr(AbX);
-                self.read8(a);
-                self.nop();
-                self.cyc += 4;
-            }
-
-            // LAX
-            0xA3 => op!(self, lax, IdX, 6),
-            0xA7 => op!(self, lax, Zp0, 3),
-            0xAF => op!(self, lax, Abs, 4),
-            0xB3 => op!(self, lax, IdY, 5),
-            0xB7 => op!(self, lax, ZpY, 4),
-            0xBF => op!(self, lax, AbY, 4),
-
-            // SAX
-            0x83 => op!(self, sax, IdX, 6),
-            0x87 => op!(self, sax, Zp0, 3),
-            0x8F => op!(self, sax, Abs, 4),
-            0x97 => op!(self, sax, ZpY, 4),
-
-            // DCP
-            0xC3 => op!(self, dcp, IdX, 8),
-            0xC7 => op!(self, dcp, Zp0, 5),
-            0xCF => op!(self, dcp, Abs, 6),
-            0xD3 => op!(self, dcp, IdY, 6),
-            0xD7 => op!(self, dcp, ZpX, 6),
-            0xDB => op!(self, dcp, AbY, 5),
-            0xDF => op!(self, dcp, AbX, 5),
-
-            // ISC
-            0xE3 => op!(self, isc, IdX, 8),
-            0xE7 => op!(self, isc, Zp0, 5),
-            0xEF => op!(self, isc, Abs, 6),
-            0xF3 => op!(self, isc, IdY, 6),
-            0xF7 => op!(self, isc, ZpX, 6),
-            0xFB => op!(self, isc, AbY, 5),
-            0xFF => op!(self, isc, AbX, 5),
-
-            // SLO
-            0x03 => op!(self, slo, IdX, 8),
-            0x07 => op!(self, slo, Zp0, 5),
-            0x0F => op!(self, slo, Abs, 6),
-            0x13 => op!(self, slo, IdY, 6),
-            0x17 => op!(self, slo, ZpX, 6),
-            0x1B => op!(self, slo, AbY, 5),
-            0x1F => op!(self, slo, AbX, 5),
-
-            // RLA
-            0x23 => op!(self, rla, IdX, 8),
-            0x27 => op!(self, rla, Zp0, 5),
-            0x2F => op!(self, rla, Abs, 6),
-            0x33 => op!(self, rla, IdY, 6),
-            0x37 => op!(self, rla, ZpX, 6),
-            0x3B => op!(self, rla, AbY, 5),
-            0x3F => op!(self, rla, AbX, 5),
-
-            // SRE
-            0x43 => op!(self, sre, IdX, 8),
-            0x47 => op!(self, sre, Zp0, 5),
-            0x4F => op!(self, sre, Abs, 6),
-            0x53 => op!(self, sre, IdY, 6),
-            0x57 => op!(self, sre, ZpX, 6),
-            0x5B => op!(self, sre, AbY, 5),
-            0x5F => op!(self, sre, AbX, 5),
-
-            // RRA
-            0x63 => op!(self, rra, IdX, 8),
-            0x67 => op!(self, rra, Zp0, 5),
-            0x6F => op!(self, rra, Abs, 6),
-            0x73 => op!(self, rra, IdY, 6),
-            0x77 => op!(self, rra, ZpX, 6),
-            0x7B => op!(self, rra, AbY, 5),
-            0x7F => op!(self, rra, AbX, 5),
-
-            _ => {
-                panic!("OPCODE {:#04x} not yet implemented", opcode);
-            }
-        };
-
-        for _ in 0..self.cyc - prev_cyc {
+        let (op, addr_mode, cycles, pc_add) = OPCODE_MATRIX[opcode as usize];
+        let addr = self.fetch_addr(addr_mode, pc_add);
+
+        self.cyc += cycles as u64;
+
+        println!("{:?} {:?} {:?} {:?}", op, addr_mode, addr, cycles);
+
+        match op {
+            Op::Adc => self.adc(addr),
+            Op::And => self.and(addr),
+            Op::Asl => self.asl(addr),
+            Op::Bcc => self.bcc(addr),
+            Op::Bcs => self.bcs(addr),
+            Op::Beq => self.beq(addr),
+            Op::Bit => self.bit(addr),
+            Op::Bmi => self.bmi(addr),
+            Op::Bne => self.bne(addr),
+            Op::Bpl => self.bpl(addr),
+            Op::Brk => self.brk(),
+            Op::Bvc => self.bvc(addr),
+            Op::Bvs => self.bvs(addr),
+            Op::Clc => self.clc(),
+            Op::Cld => self.cld(),
+            Op::Cli => self.cli(),
+            Op::Clv => self.clv(),
+            Op::Cmp => self.cmp(addr),
+            Op::Cpx => self.cpx(addr),
+            Op::Cpy => self.cpy(addr),
+            Op::Dec => self.dec(addr),
+            Op::Dex => self.dex(),
+            Op::Dey => self.dey(),
+            Op::Eor => self.eor(addr),
+            Op::Inc => self.inc(addr),
+            Op::Inx => self.inx(),
+            Op::Iny => self.iny(),
+            Op::Jmp => self.jmp(addr),
+            Op::Jsr => self.jsr(addr),
+            Op::Lda => self.lda(addr),
+            Op::Ldx => self.ldx(addr),
+            Op::Ldy => self.ldy(addr),
+            Op::Lsr => self.lsr(addr),
+            Op::Nop => self.nop(addr),
+            Op::Ora => self.ora(addr),
+            Op::Pha => self.pha(),
+            Op::Php => self.php(),
+            Op::Pla => self.pla(),
+            Op::Plp => self.plp(),
+            Op::Rol => self.rol(addr),
+            Op::Ror => self.ror(addr),
+            Op::Rti => self.rti(),
+            Op::Rts => self.rts(),
+            Op::Sbc => self.sbc(addr),
+            Op::Sec => self.sec(),
+            Op::Sed => self.sed(),
+            Op::Sei => self.sei(),
+            Op::Sta => self.sta(addr),
+            Op::Stx => self.stx(addr),
+            Op::Sty => self.sty(addr),
+            Op::Tax => self.tax(),
+            Op::Tay => self.tay(),
+            Op::Tsx => self.tsx(),
+            Op::Txa => self.txa(),
+            Op::Txs => self.txs(),
+            Op::Tya => self.tya(),
+            Op::Ahx => self.ahx(),
+            Op::Alr => self.alr(),
+            Op::Anc => self.anc(),
+            Op::Arr => self.arr(),
+            Op::Axs => self.axs(),
+            Op::Dcp => self.dcp(addr),
+            Op::Kil => self.kil(),
+            Op::Isc => self.isc(addr),
+            Op::Las => self.las(),
+            Op::Lax => self.lax(addr),
+            Op::Rla => self.rla(addr),
+            Op::Rra => self.rra(addr),
+            Op::Sax => self.sax(addr),
+            Op::Shx => self.shx(),
+            Op::Shy => self.shy(),
+            Op::Slo => self.slo(addr),
+            Op::Sre => self.sre(addr),
+            Op::Tas => self.tas(),
+            Op::Xaa => self.xaa(),
+        }
+
+        for _ in 0..self.cyc - start_cycle {
             self.bus.ppu.cycle();
         }
     }
@@ -870,8 +554,11 @@ impl Cpu {
     }
 
     fn dcp(&mut self, a: Addr) {
-        self.dec(a);
-        self.cmp(a);
+        let v = self.read8(a).wrapping_sub(1);
+        self.write8(a, v);
+        self.update_zero(v);
+        self.update_negative(v);
+        self.compare(self.a, v);
     }
 
     fn dec(&mut self, a: Addr) {
@@ -980,7 +667,9 @@ impl Cpu {
         self.write8(a, new_v);
     }
 
-    fn nop(&mut self) {}
+    fn nop(&mut self, a: Addr) {
+        self.read8(a);
+    }
 
     fn ora(&mut self, a: Addr) {
         self.a |= self.read8(a);
@@ -1158,6 +847,7 @@ impl Cpu {
         }
     }
 
+    #[allow(unused)]
     fn nmi_interrupt(&mut self) {
         self.push16(self.pc);
         let flags = self.p | FLAG_B;
@@ -1165,5 +855,49 @@ impl Cpu {
         self.set_flag(FLAG_INTERRUPT_DISABLE, true);
         self.pc = self.read_mem16(0xfffa);
         // TODO: Might want to do two ppu cycles here?
+    }
+
+    fn tas(&self) {
+        todo!()
+    }
+
+    fn xaa(&self) {
+        todo!()
+    }
+
+    fn shy(&self) {
+        todo!()
+    }
+
+    fn shx(&self) {
+        todo!()
+    }
+
+    fn las(&self) {
+        todo!()
+    }
+
+    fn axs(&self) {
+        todo!()
+    }
+
+    fn kil(&self) {
+        todo!()
+    }
+
+    fn arr(&self) {
+        todo!()
+    }
+
+    fn anc(&self) {
+        todo!()
+    }
+
+    fn alr(&self) {
+        todo!()
+    }
+
+    fn ahx(&self) {
+        todo!()
     }
 }

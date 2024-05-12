@@ -247,7 +247,7 @@ impl NemuApp {
                     let mut offset = cpu.pc;
                     for i in 0..10 {
                         if let Some(opcode) = emu.cpu.inspect_mem8(cpu.pc) {
-                            let (op, addr_mode, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
+                            let (op, addr_mode, _, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
 
                             let read_8 = |base: u16, offset: u16| {
                                 emu.cpu
@@ -264,7 +264,6 @@ impl NemuApp {
                             };
 
                             let addr_format = match addr_mode {
-                                nemu::op::AddrMode::Imp => "{{IMP}}".to_string(),
                                 nemu::op::AddrMode::Acc => "A {{ACC}}".to_string(),
                                 nemu::op::AddrMode::Imm => {
                                     format!("#{} {{IMM}}", read_8(offset, 1))

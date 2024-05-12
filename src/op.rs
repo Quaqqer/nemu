@@ -166,8 +166,6 @@ impl std::fmt::Display for Op {
 
 #[derive(Debug, Clone, Copy)]
 pub enum AddrMode {
-    /// No argument (implicit)
-    Imp,
     /// Accumulator
     Acc,
     /// Adress `pc + 1`
@@ -203,7 +201,6 @@ pub enum AddrMode {
 impl AddrMode {
     pub fn fetched_bytes(&self) -> u8 {
         match self {
-            AddrMode::Imp => 0,
             AddrMode::Acc => 0,
             AddrMode::Imm => 1,
             AddrMode::Zp0 => 1,
@@ -220,28 +217,33 @@ impl AddrMode {
     }
 }
 
-pub const OPCODE_MATRIX: [(Op, AddrMode, u8); 256] = {
+/// The opcode matrix, containing the operation, addressing mode, the cycles the instruction takes
+/// and if the instruction adds one clock cycle if a page boundary is crossed
+pub const OPCODE_MATRIX: [(Op, AddrMode, u8, bool); 256] = {
     use AddrMode::*;
     use Op::*;
 
+    let t = true;
+    let f = false;
     #[rustfmt::skip]
-    let matrix: [(Op, AddrMode, u8); 256] = [
-            (Brk, Imp, 7), (Ora, IdX, 6), (Kil, Imp, 0), (Slo, IdX, 8), (Nop, Zp0, 3), (Ora, Zp0, 3), (Asl, Zp0, 5), (Slo, Zp0, 5), (Php, Imp, 3), (Ora, Imm, 2), (Asl, Imp, 2), (Anc, Imm, 2), (Nop, Abs, 4), (Ora, Abs, 4), (Asl, Abs, 6), (Slo, Abs, 6),
-            (Bpl, Rel, 2), (Ora, IdY, 5), (Kil, Imp, 0), (Slo, IdY, 8), (Nop, ZpX, 4), (Ora, ZpX, 4), (Asl, ZpX, 6), (Slo, ZpX, 6), (Clc, Imp, 2), (Ora, AbY, 4), (Nop, Imp, 2), (Slo, AbY, 7), (Nop, AbX, 4), (Ora, AbX, 4), (Asl, AbX, 7), (Slo, AbX, 7),
-            (Jsr, Abs, 6), (And, IdX, 6), (Kil, Imp, 0), (Rla, IdX, 8), (Bit, Zp0, 3), (And, Zp0, 3), (Rol, Zp0, 5), (Rla, Zp0, 5), (Plp, Imp, 4), (And, Imm, 2), (Rol, Imp, 2), (Anc, Imm, 2), (Bit, Abs, 4), (And, Abs, 4), (Rol, Abs, 6), (Rla, Abs, 6),
-            (Bmi, Rel, 2), (And, IdY, 5), (Kil, Imp, 0), (Rla, IdY, 8), (Nop, ZpX, 4), (And, ZpX, 4), (Rol, ZpX, 6), (Rla, ZpX, 6), (Sec, Imp, 2), (And, AbY, 4), (Nop, Imp, 2), (Rla, AbY, 7), (Nop, AbX, 4), (And, AbX, 4), (Rol, AbX, 7), (Rla, AbX, 7),
-            (Rti, Imp, 6), (Eor, IdX, 6), (Kil, Imp, 0), (Sre, IdX, 8), (Nop, Zp0, 3), (Eor, Zp0, 3), (Lsr, Zp0, 5), (Sre, Zp0, 5), (Pha, Imp, 3), (Eor, Imm, 2), (Lsr, Imp, 2), (Alr, Imm, 2), (Jmp, Abs, 3), (Eor, Abs, 4), (Lsr, Abs, 6), (Sre, Abs, 6),
-            (Bvc, Rel, 2), (Eor, IdY, 5), (Kil, Imp, 0), (Sre, IdY, 8), (Nop, ZpX, 4), (Eor, ZpX, 4), (Lsr, ZpX, 6), (Sre, ZpX, 6), (Cli, Imp, 2), (Eor, AbY, 4), (Nop, Imp, 2), (Sre, AbY, 7), (Nop, AbX, 4), (Eor, AbX, 4), (Lsr, AbX, 7), (Sre, AbX, 7),
-            (Rts, Imp, 6), (Adc, IdX, 6), (Kil, Imp, 0), (Rra, IdX, 8), (Nop, Zp0, 3), (Adc, Zp0, 3), (Ror, Zp0, 5), (Rra, Zp0, 5), (Pla, Imp, 4), (Adc, Imm, 2), (Ror, Imp, 2), (Arr, Imm, 2), (Jmp, Ind, 5), (Adc, Abs, 4), (Ror, Abs, 6), (Rra, Abs, 6),
-            (Bvs, Rel, 2), (Adc, IdY, 5), (Kil, Imp, 0), (Rra, IdY, 8), (Nop, ZpX, 4), (Adc, ZpX, 4), (Ror, ZpX, 6), (Rra, ZpX, 6), (Sei, Imp, 2), (Adc, AbY, 4), (Nop, Imp, 2), (Rra, AbY, 7), (Nop, AbX, 4), (Adc, AbX, 4), (Ror, AbX, 7), (Rra, AbX, 7),
-            (Nop, Imm, 2), (Sta, IdX, 6), (Nop, Imm, 2), (Sax, IdX, 6), (Sty, Zp0, 3), (Sta, Zp0, 3), (Stx, Zp0, 3), (Sax, Zp0, 3), (Dey, Imp, 2), (Nop, Imm, 2), (Txa, Imp, 2), (Xaa, Imm, 2), (Sty, Abs, 4), (Sta, Abs, 4), (Stx, Abs, 4), (Sax, Abs, 4),
-            (Bcc, Rel, 2), (Sta, IdY, 6), (Kil, Imp, 0), (Ahx, IdY, 6), (Sty, ZpX, 4), (Sta, ZpX, 4), (Stx, ZpY, 4), (Sax, ZpY, 4), (Tya, Imp, 2), (Sta, AbY, 5), (Txs, Imp, 2), (Tas, AbY, 5), (Shy, AbX, 5), (Sta, AbX, 5), (Shx, AbY, 5), (Ahx, AbY, 5),
-            (Ldy, Imm, 2), (Lda, IdX, 6), (Ldx, Imm, 2), (Lax, IdX, 6), (Ldy, Zp0, 3), (Lda, Zp0, 3), (Ldx, Zp0, 3), (Lax, Zp0, 3), (Tay, Imp, 2), (Lda, Imm, 2), (Tax, Imp, 2), (Lax, Imm, 2), (Ldy, Abs, 4), (Lda, Abs, 4), (Ldx, Abs, 4), (Lax, Abs, 4),
-            (Bcs, Rel, 2), (Lda, IdY, 5), (Kil, Imp, 0), (Lax, IdY, 5), (Ldy, ZpX, 4), (Lda, ZpX, 4), (Ldx, ZpY, 4), (Lax, ZpY, 4), (Clv, Imp, 2), (Lda, AbY, 4), (Tsx, Imp, 2), (Las, AbY, 4), (Ldy, AbX, 4), (Lda, AbX, 4), (Ldx, AbY, 4), (Lax, AbY, 4),
-            (Cpy, Imm, 2), (Cmp, IdX, 6), (Nop, Imm, 2), (Dcp, IdX, 8), (Cpy, Zp0, 3), (Cmp, Zp0, 3), (Dec, Zp0, 5), (Dcp, Zp0, 5), (Iny, Imp, 2), (Cmp, Imm, 2), (Dex, Imp, 2), (Axs, Imm, 2), (Cpy, Abs, 4), (Cmp, Abs, 4), (Dec, Abs, 6), (Dcp, Abs, 6),
-            (Bne, Rel, 2), (Cmp, IdY, 5), (Kil, Imp, 0), (Dcp, IdY, 8), (Nop, ZpX, 4), (Cmp, ZpX, 4), (Dec, ZpX, 6), (Dcp, ZpX, 6), (Cld, Imp, 2), (Cmp, AbY, 4), (Nop, Imp, 2), (Dcp, AbY, 7), (Nop, AbX, 4), (Cmp, AbX, 4), (Dec, AbX, 7), (Dcp, AbX, 7),
-            (Cpx, Imm, 2), (Sbc, IdX, 6), (Nop, Imm, 2), (Isc, IdX, 8), (Cpx, Zp0, 3), (Sbc, Zp0, 3), (Inc, Zp0, 5), (Isc, Zp0, 5), (Inx, Imp, 2), (Sbc, Imm, 2), (Nop, Imp, 2), (Sbc, Imm, 2), (Cpx, Abs, 4), (Sbc, Abs, 4), (Inc, Abs, 6), (Isc, Abs, 6),
-            (Beq, Rel, 2), (Sbc, IdY, 5), (Kil, Imp, 0), (Isc, IdY, 8), (Nop, ZpX, 4), (Sbc, ZpX, 4), (Inc, ZpX, 6), (Isc, ZpX, 6), (Sed, Imp, 2), (Sbc, AbY, 4), (Nop, Imp, 2), (Isc, AbY, 7), (Nop, AbX, 4), (Sbc, AbX, 4), (Inc, AbX, 7), (Isc, AbX, 7),
+    let matrix: [(Op, AddrMode, u8, bool); 256] = [
+    /*        x0                x1                x2                x3                x4                x5                x6                x7                x8                x9                xA                 xB               xC                xD                xE                xF        */
+    /* 0x */ (Brk, Acc, 7, f), (Ora, IdX, 6, f), (Kil, Acc, 0, f), (Slo, IdX, 8, f), (Nop, Zp0, 3, f), (Ora, Zp0, 3, f), (Asl, Zp0, 5, f), (Slo, Zp0, 5, f), (Php, Acc, 3, f), (Ora, Imm, 2, f), (Asl, Acc, 2, f), (Anc, Imm, 2, f), (Nop, Abs, 4, f), (Ora, Abs, 4, f), (Asl, Abs, 6, f), (Slo, Abs, 6, f),
+    /* 1x */ (Bpl, Rel, 2, t), (Ora, IdY, 5, t), (Kil, Acc, 0, f), (Slo, IdY, 8, f), (Nop, ZpX, 4, f), (Ora, ZpX, 4, f), (Asl, ZpX, 6, f), (Slo, ZpX, 6, f), (Clc, Acc, 2, f), (Ora, AbY, 4, t), (Nop, Acc, 2, f), (Slo, AbY, 7, f), (Nop, AbX, 4, t), (Ora, AbX, 4, t), (Asl, AbX, 7, f), (Slo, AbX, 7, f),
+    /* 2x */ (Jsr, Abs, 6, f), (And, IdX, 6, f), (Kil, Acc, 0, f), (Rla, IdX, 8, f), (Bit, Zp0, 3, f), (And, Zp0, 3, f), (Rol, Zp0, 5, f), (Rla, Zp0, 5, f), (Plp, Acc, 4, f), (And, Imm, 2, f), (Rol, Acc, 2, f), (Anc, Imm, 2, f), (Bit, Abs, 4, f), (And, Abs, 4, f), (Rol, Abs, 6, f), (Rla, Abs, 6, f),
+    /* 3x */ (Bmi, Rel, 2, t), (And, IdY, 5, t), (Kil, Acc, 0, f), (Rla, IdY, 8, f), (Nop, ZpX, 4, f), (And, ZpX, 4, f), (Rol, ZpX, 6, f), (Rla, ZpX, 6, f), (Sec, Acc, 2, f), (And, AbY, 4, t), (Nop, Acc, 2, f), (Rla, AbY, 7, f), (Nop, AbX, 4, t), (And, AbX, 4, t), (Rol, AbX, 7, f), (Rla, AbX, 7, f),
+    /* 4x */ (Rti, Acc, 6, f), (Eor, IdX, 6, f), (Kil, Acc, 0, f), (Sre, IdX, 8, f), (Nop, Zp0, 3, f), (Eor, Zp0, 3, f), (Lsr, Zp0, 5, f), (Sre, Zp0, 5, f), (Pha, Acc, 3, f), (Eor, Imm, 2, f), (Lsr, Acc, 2, f), (Alr, Imm, 2, f), (Jmp, Abs, 3, f), (Eor, Abs, 4, f), (Lsr, Abs, 6, f), (Sre, Abs, 6, f),
+    /* 5x */ (Bvc, Rel, 2, t), (Eor, IdY, 5, t), (Kil, Acc, 0, f), (Sre, IdY, 8, f), (Nop, ZpX, 4, f), (Eor, ZpX, 4, f), (Lsr, ZpX, 6, f), (Sre, ZpX, 6, f), (Cli, Acc, 2, f), (Eor, AbY, 4, t), (Nop, Acc, 2, f), (Sre, AbY, 7, f), (Nop, AbX, 4, t), (Eor, AbX, 4, t), (Lsr, AbX, 7, f), (Sre, AbX, 7, f),
+    /* 6x */ (Rts, Acc, 6, f), (Adc, IdX, 6, f), (Kil, Acc, 0, f), (Rra, IdX, 8, f), (Nop, Zp0, 3, f), (Adc, Zp0, 3, f), (Ror, Zp0, 5, f), (Rra, Zp0, 5, f), (Pla, Acc, 4, f), (Adc, Imm, 2, f), (Ror, Acc, 2, f), (Arr, Imm, 2, f), (Jmp, Ind, 5, f), (Adc, Abs, 4, f), (Ror, Abs, 6, f), (Rra, Abs, 6, f),
+    /* 7x */ (Bvs, Rel, 2, t), (Adc, IdY, 5, t), (Kil, Acc, 0, f), (Rra, IdY, 8, f), (Nop, ZpX, 4, f), (Adc, ZpX, 4, f), (Ror, ZpX, 6, f), (Rra, ZpX, 6, f), (Sei, Acc, 2, f), (Adc, AbY, 4, f), (Nop, Acc, 2, f), (Rra, AbY, 7, f), (Nop, AbX, 4, t), (Adc, AbX, 4, t), (Ror, AbX, 7, f), (Rra, AbX, 7, f),
+    /* 8x */ (Nop, Imm, 2, f), (Sta, IdX, 6, f), (Nop, Imm, 2, f), (Sax, IdX, 6, f), (Sty, Zp0, 3, f), (Sta, Zp0, 3, f), (Stx, Zp0, 3, f), (Sax, Zp0, 3, f), (Dey, Acc, 2, f), (Nop, Imm, 2, f), (Txa, Acc, 2, f), (Xaa, Imm, 2, f), (Sty, Abs, 4, f), (Sta, Abs, 4, f), (Stx, Abs, 4, f), (Sax, Abs, 4, f),
+    /* 9x */ (Bcc, Rel, 2, t), (Sta, IdY, 6, t), (Kil, Acc, 0, f), (Ahx, IdY, 6, t), (Sty, ZpX, 4, f), (Sta, ZpX, 4, f), (Stx, ZpY, 4, f), (Sax, ZpY, 4, f), (Tya, Acc, 2, f), (Sta, AbY, 5, t), (Txs, Acc, 2, f), (Tas, AbY, 5, t), (Shy, AbX, 5, t), (Sta, AbX, 5, t), (Shx, AbY, 5, t), (Ahx, AbY, 5, t),
+    /* Ax */ (Ldy, Imm, 2, f), (Lda, IdX, 6, f), (Ldx, Imm, 2, f), (Lax, IdX, 6, f), (Ldy, Zp0, 3, f), (Lda, Zp0, 3, f), (Ldx, Zp0, 3, f), (Lax, Zp0, 3, f), (Tay, Acc, 2, f), (Lda, Imm, 2, f), (Tax, Acc, 2, f), (Lax, Imm, 2, f), (Ldy, Abs, 4, f), (Lda, Abs, 4, f), (Ldx, Abs, 4, f), (Lax, Abs, 4, f),
+    /* Bx */ (Bcs, Rel, 2, t), (Lda, IdY, 5, t), (Kil, Acc, 0, f), (Lax, IdY, 5, t), (Ldy, ZpX, 4, f), (Lda, ZpX, 4, f), (Ldx, ZpY, 4, f), (Lax, ZpY, 4, f), (Clv, Acc, 2, f), (Lda, AbY, 4, t), (Tsx, Acc, 2, f), (Las, AbY, 4, t), (Ldy, AbX, 4, t), (Lda, AbX, 4, t), (Ldx, AbY, 4, t), (Lax, AbY, 4, t),
+    /* Cx */ (Cpy, Imm, 2, f), (Cmp, IdX, 6, f), (Nop, Imm, 2, f), (Dcp, IdX, 8, f), (Cpy, Zp0, 3, f), (Cmp, Zp0, 3, f), (Dec, Zp0, 5, f), (Dcp, Zp0, 5, f), (Iny, Acc, 2, f), (Cmp, Imm, 2, f), (Dex, Acc, 2, f), (Axs, Imm, 2, f), (Cpy, Abs, 4, f), (Cmp, Abs, 4, f), (Dec, Abs, 6, f), (Dcp, Abs, 6, f),
+    /* Dx */ (Bne, Rel, 2, t), (Cmp, IdY, 5, t), (Kil, Acc, 0, f), (Dcp, IdY, 8, f), (Nop, ZpX, 4, f), (Cmp, ZpX, 4, f), (Dec, ZpX, 6, f), (Dcp, ZpX, 6, f), (Cld, Acc, 2, f), (Cmp, AbY, 4, t), (Nop, Acc, 2, f), (Dcp, AbY, 7, f), (Nop, AbX, 4, t), (Cmp, AbX, 4, t), (Dec, AbX, 7, f), (Dcp, AbX, 7, f),
+    /* Ex */ (Cpx, Imm, 2, f), (Sbc, IdX, 6, f), (Nop, Imm, 2, f), (Isc, IdX, 8, f), (Cpx, Zp0, 3, f), (Sbc, Zp0, 3, f), (Inc, Zp0, 5, f), (Isc, Zp0, 5, f), (Inx, Acc, 2, f), (Sbc, Imm, 2, f), (Nop, Acc, 2, f), (Sbc, Imm, 2, f), (Cpx, Abs, 4, f), (Sbc, Abs, 4, f), (Inc, Abs, 6, f), (Isc, Abs, 6, f),
+    /* Fx */ (Beq, Rel, 2, t), (Sbc, IdY, 5, t), (Kil, Acc, 0, f), (Isc, IdY, 8, f), (Nop, ZpX, 4, f), (Sbc, ZpX, 4, f), (Inc, ZpX, 6, f), (Isc, ZpX, 6, f), (Sed, Acc, 2, f), (Sbc, AbY, 4, t), (Nop, Acc, 2, f), (Isc, AbY, 7, f), (Nop, AbX, 4, t), (Sbc, AbX, 4, t), (Inc, AbX, 7, f), (Isc, AbX, 7, f),
 
     ];
     matrix

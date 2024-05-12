@@ -1,5 +1,4 @@
 #![feature(let_chains)]
-#![allow(dead_code)]
 
 pub mod apu;
 pub mod bus;
