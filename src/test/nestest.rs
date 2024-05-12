@@ -66,7 +66,7 @@ fn run_nestest() {
             a: cpu.a,
             x: cpu.x,
             y: cpu.y,
-            p: cpu.p,
+            p: cpu.p.bits(),
             sp: cpu.sp,
             cyc: cpu.cyc,
         };

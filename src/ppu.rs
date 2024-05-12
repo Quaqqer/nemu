@@ -1,16 +1,21 @@
 use crate::cart::Cart;
+use bitflags::{bitflags, Flags};
 
-const CTRL_X: u8 = 1 << 0;
-const CTRL_Y: u8 = 1 << 1;
-const CTRL_INCREMENT: u8 = 1 << 2;
-const CTRL_SPRITE_ADDRESS: u8 = 1 << 3;
-const CTRL_BACKGROUND: u8 = 1 << 4;
-const CTRL_SPRITE_SIZE: u8 = 1 << 5;
-const CTRL_MASTER_SLAVE: u8 = 1 << 6;
-const CTRL_NMI: u8 = 1 << 7;
+bitflags! {
+    pub struct PpuCtrl: u8 {
+        const X              = 0b00000001;
+        const Y              = 0b00000010;
+        const INCREMENT      = 0b00000100;
+        const SPRITE_ADDRESS = 0b00001000;
+        const BACKGROUND     = 0b00010000;
+        const SPRITE_SIZE    = 0b00100000;
+        const MASTER_SLAVE   = 0b01000000;
+        const NMI            = 0b10000000;
+    }
+}
 
 pub struct Ppu {
-    ppuctrl: u8,
+    ppuctrl: PpuCtrl,
     ppumask: u8,
     oamaddr: u8,
     latch: u8,
@@ -47,7 +52,7 @@ impl Ppu {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Ppu {
-            ppuctrl: 0x00,
+            ppuctrl: PpuCtrl::empty(),
             ppumask: 0x00,
             oamaddr: 0x00,
             latch: 0x00,
@@ -89,7 +94,7 @@ impl Ppu {
     /// * `cart`: The cart
     /// * `addr`: The memory address
     pub(crate) fn cpu_read_register(&mut self, cart: &mut Cart, addr: u16) -> u8 {
-        debug_assert!(0x2000 <= addr && addr < 0x4000 || addr == 0x4014);
+        debug_assert!((0x2000..0x4000).contains(&addr) || addr == 0x4014);
 
         if addr == 0x4014 {
             0
@@ -123,13 +128,13 @@ impl Ppu {
     /// * `addr`: The memory address
     /// * `v`: The value
     pub(crate) fn cpu_write_register(&mut self, cart: &mut Cart, addr: u16, v: u8) {
-        debug_assert!(0x2000 <= addr && addr < 0x4000);
+        debug_assert!((0x2000..0x4000).contains(&addr));
 
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
             match (addr - 0x2000) % 0x8 {
-                0x0 => self.ppuctrl = v,
+                0x0 => self.ppuctrl = PpuCtrl::from_bits(v).unwrap(),
                 0x1 => self.ppumask = v,
                 0x2 => {}
                 0x3 => self.oamaddr = v,
@@ -175,7 +180,7 @@ impl Ppu {
     }
 
     fn nametable_address(&self) -> u16 {
-        match self.ppuctrl & 0x03 {
+        match self.ppuctrl.bits() & 0b11 {
             0 => 0x2000,
             1 => 0x2400,
             2 => 0x2800,
@@ -185,14 +190,14 @@ impl Ppu {
     }
 
     fn ppudata_increase(&self) -> u16 {
-        match self.ppuctrl & CTRL_INCREMENT != 0 {
+        match self.ppuctrl.intersects(PpuCtrl::INCREMENT) {
             false => 1,
             true => 32,
         }
     }
 
     pub fn reset(&mut self) {
-        self.ppuctrl = 0x00;
+        self.ppuctrl = PpuCtrl::empty();
         self.ppumask = 0x00;
         self.ppuscroll = 0x0000;
         self.latch = 0x00;

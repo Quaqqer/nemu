@@ -2,6 +2,24 @@ use crate::apu::Apu;
 use crate::op::{AddrMode, Op, OPCODE_MATRIX};
 use crate::ppu::Ppu;
 use crate::{cart::Cart, ppu::Display};
+use bitflags::bitflags;
+
+/// The status register
+#[derive(Clone, Copy)]
+pub struct P(u8);
+
+bitflags! {
+    impl P: u8 {
+        const CARRY             = 0b00000001;
+        const ZERO              = 0b00000010;
+        const INTERRUPT_DISABLE = 0b00000100;
+        const DECIMAL           = 0b00001000;
+        const B                 = 0b00010000;
+        const _5                = 0b00100000;
+        const OVERFLOW          = 0b01000000;
+        const NEGATIVE          = 0b10000000;
+    }
+}
 
 pub struct Cpu {
     pub a: u8,
@@ -9,7 +27,7 @@ pub struct Cpu {
     pub y: u8,
     pub pc: u16,
     pub sp: u8,
-    pub p: u8,
+    pub p: P,
 
     pub cyc: u64,
 
@@ -140,7 +158,7 @@ impl Cpu {
 
     pub(crate) fn reset(&mut self) {
         self.sp = self.sp.wrapping_sub(3);
-        self.p |= FLAG_INTERRUPT_DISABLE;
+        self.p |= P::INTERRUPT_DISABLE;
     }
 
     pub fn new() -> Self {
@@ -150,7 +168,7 @@ impl Cpu {
             y: 0,
             pc: 0,
             sp: 0xFD,
-            p: 0x24,
+            p: P::INTERRUPT_DISABLE | P::_5,
 
             cyc: 7,
 
@@ -343,32 +361,12 @@ impl Cpu {
         self.cyc - start_cycle
     }
 
-    fn get_flag(&self, mask: u8) -> bool {
-        self.p & mask != 0
-    }
-
-    fn set_flag(&mut self, mask: u8, v: bool) {
-        if v {
-            self.enable_flag(mask);
-        } else {
-            self.disable_flag(mask);
-        }
-    }
-
-    fn enable_flag(&mut self, mask: u8) {
-        self.p |= mask;
-    }
-
-    fn disable_flag(&mut self, mask: u8) {
-        self.p &= !mask;
-    }
-
     fn update_negative(&mut self, v: u8) {
-        self.set_flag(FLAG_NEGATIVE, (v as i8).is_negative());
+        self.p.set(P::NEGATIVE, (v as i8).is_negative());
     }
 
     fn update_zero(&mut self, v: u8) {
-        self.set_flag(FLAG_ZERO, v == 0);
+        self.p.set(P::ZERO, v == 0);
     }
 
     fn relative_jump(&mut self, d: i8) -> u64 {
@@ -387,9 +385,9 @@ impl Cpu {
     }
 
     fn compare(&mut self, r: u8, v: u8) {
-        self.set_flag(FLAG_CARRY, r >= v);
-        self.set_flag(FLAG_ZERO, r == v);
-        self.set_flag(FLAG_NEGATIVE, r.wrapping_sub(v) & 0x80 != 0);
+        self.p.set(P::CARRY, r >= v);
+        self.p.set(P::ZERO, r == v);
+        self.p.set(P::NEGATIVE, r.wrapping_sub(v) & 0x80 != 0);
     }
 
     fn push8(&mut self, bus: &mut CpuBus, v: u8) {
@@ -429,7 +427,7 @@ impl Cpu {
     fn adc(&mut self, bus: &mut CpuBus, a: Addr) {
         let lhs = self.a as u16;
         let rhs = self.read8(bus, a) as u16;
-        let carry = self.get_flag(FLAG_CARRY) as u16;
+        let carry = self.p.intersects(P::CARRY) as u16;
 
         let res = lhs + rhs + carry;
         let res8 = res as u8;
@@ -437,8 +435,9 @@ impl Cpu {
 
         self.update_zero(res8);
         self.update_negative(res8);
-        self.set_flag(FLAG_OVERFLOW, !(lhs ^ rhs) & (lhs ^ res) & 0x80 != 0);
-        self.set_flag(FLAG_CARRY, res > 0xFF);
+        self.p
+            .set(P::OVERFLOW, !(lhs ^ rhs) & (lhs ^ res) & 0x80 != 0);
+        self.p.set(P::CARRY, res > 0xFF);
     }
 
     fn and(&mut self, bus: &mut CpuBus, a: Addr) {
@@ -451,7 +450,7 @@ impl Cpu {
         let v = self.read8(bus, a);
         let new_v = v << 1;
 
-        self.set_flag(FLAG_CARRY, v & 0x80 != 0);
+        self.p.set(P::CARRY, v & 0x80 != 0);
         self.update_zero(new_v);
         self.update_negative(new_v);
 
@@ -459,66 +458,66 @@ impl Cpu {
     }
 
     fn bcc(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_CARRY));
+        self.generic_branch(a, |cpu| !cpu.p.intersects(P::CARRY));
     }
 
     fn bcs(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_CARRY));
+        self.generic_branch(a, |cpu| cpu.p.intersects(P::CARRY));
     }
 
     fn beq(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_ZERO));
+        self.generic_branch(a, |cpu| cpu.p.intersects(P::ZERO));
     }
 
     fn bit(&mut self, bus: &mut CpuBus, a: Addr) {
         let m = self.read8(bus, a);
         let v = self.a & m;
-        self.set_flag(FLAG_OVERFLOW, m & (1 << 6) != 0);
-        self.set_flag(FLAG_NEGATIVE, m & (1 << 7) != 0);
-        self.set_flag(FLAG_ZERO, v == 0);
+        self.p.set(P::OVERFLOW, m & (1 << 6) != 0);
+        self.p.set(P::NEGATIVE, m & (1 << 7) != 0);
+        self.p.set(P::ZERO, m & v == 0);
     }
 
     fn bmi(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_NEGATIVE));
+        self.generic_branch(a, |cpu| cpu.p.intersects(P::NEGATIVE));
     }
 
     fn bne(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_ZERO));
+        self.generic_branch(a, |cpu| !cpu.p.intersects(P::ZERO));
     }
 
     fn bpl(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_NEGATIVE));
+        self.generic_branch(a, |cpu| !cpu.p.intersects(P::NEGATIVE));
     }
 
     fn brk(&mut self, bus: &mut CpuBus) {
         self.push16(bus, self.pc);
-        self.push8(bus, self.p | FLAG_5 | FLAG_B);
-        self.enable_flag(FLAG_INTERRUPT_DISABLE);
+        self.push8(bus, (self.p | P::_5 | P::B).bits());
+        self.p |= P::INTERRUPT_DISABLE;
         self.pc = self.read_mem16(bus, 0xFFFE);
     }
 
     fn bvc(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| !cpu.get_flag(FLAG_OVERFLOW));
+        self.generic_branch(a, |cpu| !cpu.p.intersects(P::OVERFLOW));
     }
 
     fn bvs(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.generic_branch(a, |cpu| cpu.get_flag(FLAG_OVERFLOW));
+        self.generic_branch(a, |cpu| cpu.p.intersects(P::OVERFLOW));
     }
 
     fn clc(&mut self, bus: &mut CpuBus) {
-        self.disable_flag(FLAG_CARRY);
+        self.p -= P::CARRY;
     }
 
     fn cld(&mut self, bus: &mut CpuBus) {
-        self.disable_flag(FLAG_DECIMAL);
+        self.p -= P::DECIMAL;
     }
 
     fn cli(&mut self, bus: &mut CpuBus) {
-        self.disable_flag(FLAG_INTERRUPT_DISABLE);
+        self.p -= P::INTERRUPT_DISABLE;
     }
 
     fn clv(&mut self, bus: &mut CpuBus) {
-        self.disable_flag(FLAG_OVERFLOW);
+        self.p -= P::OVERFLOW;
     }
 
     fn cmp(&mut self, bus: &mut CpuBus, a: Addr) {
@@ -643,7 +642,7 @@ impl Cpu {
         let v = self.read8(bus, a);
         let new_v = v >> 1;
 
-        self.set_flag(FLAG_CARRY, v & 0x1 != 0);
+        self.p.set(P::CARRY, v & 1 != 0);
         self.update_zero(new_v);
         self.update_negative(new_v);
 
@@ -665,8 +664,8 @@ impl Cpu {
     }
 
     fn php(&mut self, bus: &mut CpuBus) {
-        let p = self.p | FLAG_5 | FLAG_B;
-        self.push8(bus, p);
+        let p = (self.p | P::_5 | P::B);
+        self.push8(bus, p.bits());
     }
 
     fn pla(&mut self, bus: &mut CpuBus) {
@@ -676,7 +675,7 @@ impl Cpu {
     }
 
     fn plp(&mut self, bus: &mut CpuBus) {
-        self.p = (self.pop8(bus) & !FLAG_B) | FLAG_5;
+        self.p = (P::from_bits(self.pop8(bus)).unwrap() - P::B) | P::_5;
     }
 
     fn rla(&mut self, bus: &mut CpuBus, a: Addr) {
@@ -687,10 +686,10 @@ impl Cpu {
     fn rol(&mut self, bus: &mut CpuBus, a: Addr) {
         let v = self.read8(bus, a);
         let mut new_v = v << 1;
-        if self.get_flag(FLAG_CARRY) {
+        if self.p.intersects(P::CARRY) {
             new_v |= 0x01;
         }
-        self.set_flag(FLAG_CARRY, v & 0x80 != 0);
+        self.p.set(P::CARRY, v & 0x80 != 0);
 
         self.update_zero(new_v);
         self.update_negative(new_v);
@@ -701,10 +700,10 @@ impl Cpu {
     fn ror(&mut self, bus: &mut CpuBus, a: Addr) {
         let v = self.read8(bus, a);
         let mut new_v = v >> 1;
-        if self.get_flag(FLAG_CARRY) {
+        if self.p.intersects(P::CARRY) {
             new_v |= 0x80;
         }
-        self.set_flag(FLAG_CARRY, v & 0x01 != 0);
+        self.p.set(P::CARRY, v & 1 != 0);
 
         self.update_zero(new_v);
         self.update_negative(new_v);
@@ -718,7 +717,7 @@ impl Cpu {
     }
 
     fn rti(&mut self, bus: &mut CpuBus) {
-        self.p = self.pop8(bus) | FLAG_5;
+        self.p = P::from_bits(self.pop8(bus)).unwrap() | P::_5;
         self.pc = self.pop16(bus);
     }
 
@@ -734,7 +733,7 @@ impl Cpu {
     fn sbc(&mut self, bus: &mut CpuBus, a: Addr) {
         let lhs = self.a as i16;
         let rhs = self.read8(bus, a) as i16;
-        let borrow = !self.get_flag(FLAG_CARRY) as i16;
+        let borrow = !self.p.intersects(P::CARRY) as i16;
 
         let res = lhs - rhs - borrow;
         let res8 = res as u8;
@@ -742,22 +741,23 @@ impl Cpu {
         self.update_zero(res8);
         self.update_negative(res8);
 
-        self.set_flag(FLAG_CARRY, res >= 0);
-        self.set_flag(FLAG_OVERFLOW, (lhs ^ rhs) & (lhs ^ res) & 0x80 != 0);
+        self.p.set(P::CARRY, res >= 0);
+        self.p
+            .set(P::OVERFLOW, (lhs ^ rhs) & (lhs ^ res) & 0x80 != 0);
 
         self.a = res8;
     }
 
     fn sec(&mut self, bus: &mut CpuBus) {
-        self.set_flag(FLAG_CARRY, true);
+        self.p |= P::CARRY;
     }
 
     fn sed(&mut self, bus: &mut CpuBus) {
-        self.set_flag(FLAG_DECIMAL, true);
+        self.p |= P::DECIMAL;
     }
 
     fn sei(&mut self, bus: &mut CpuBus) {
-        self.set_flag(FLAG_INTERRUPT_DISABLE, true);
+        self.p |= P::INTERRUPT_DISABLE;
     }
 
     fn slo(&mut self, bus: &mut CpuBus, a: Addr) {
@@ -833,9 +833,9 @@ impl Cpu {
     #[allow(unused)]
     fn nmi_interrupt(&mut self, bus: &mut CpuBus) {
         self.push16(bus, self.pc);
-        let flags = self.p | FLAG_B;
-        self.push8(bus, flags);
-        self.set_flag(FLAG_INTERRUPT_DISABLE, true);
+        let flags = self.p | P::B;
+        self.push8(bus, flags.bits());
+        self.p |= P::INTERRUPT_DISABLE;
         self.pc = self.read_mem16(bus, 0xfffa);
         // TODO: Might want to do two ppu cycles here?
     }
