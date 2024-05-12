@@ -251,20 +251,6 @@ impl Cpu {
         }
     }
 
-    pub fn frame(&mut self) -> &Display {
-        let wanted = self.bus.ppu.cycle() - (self.bus.ppu.cycle() % (341 * 262)) + 341 * 262;
-
-        while self.bus.ppu.cycle() < wanted {
-            self.tick();
-
-            for _ in 0..3 {
-                self.bus.ppu.tick();
-            }
-        }
-
-        self.bus.ppu.display()
-    }
-
     pub fn tick(&mut self) {
         let start_cycle = self.cyc;
 
@@ -356,7 +342,7 @@ impl Cpu {
         }
 
         for _ in 0..self.cyc - start_cycle {
-            self.bus.ppu.cycle();
+            self.bus.ppu.tick();
         }
     }
 

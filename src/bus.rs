@@ -9,9 +9,9 @@ pub struct Bus {
 impl Bus {
     pub fn new(cart: Cart) -> Self {
         Bus {
-            cart,
-            ppu: Ppu::new(),
+            ppu: Ppu::new(&cart),
             apu: Apu::new(),
+            cart,
         }
     }
 

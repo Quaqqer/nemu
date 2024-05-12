@@ -6,7 +6,8 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn render_frame(&mut self) -> &ppu::Display {
-        self.cpu.frame()
+        self.cpu.tick();
+        self.cpu.bus.ppu.display()
     }
 
     pub fn new(cart: Cart) -> Self {

@@ -10,13 +10,10 @@ use eframe::egui::{
 use egui::Id;
 
 fn main() {
-    let native_options = eframe::NativeOptions::default();
-
-    // TODO: REmvoe
-    // let path = rfd::FileDialog::new()
-    //     .add_filter("NES", &["nes"])
-    //     .pick_file()
-    //     .unwrap();
+    let native_options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default().with_min_inner_size(Vec2::new(512., 512.)),
+        ..Default::default()
+    };
 
     eframe::run_native(
         "Nemu",
@@ -306,6 +303,8 @@ impl NemuApp {
                                 .wrapping_add(addr_mode.fetched_bytes() as u16);
 
                             if i == 0 {
+                                // TODO: This is wrong since we tick an entire frame instead of
+                                // a cpu instruction
                                 self.op_history.push_back(s.clone());
 
                                 if self.op_history.len() > OP_HISTORY_LIMIT {
@@ -331,18 +330,21 @@ impl NemuApp {
 
                 let chr = &emu.cpu.bus.cart.chr;
 
-                let read_tiles = |offset: usize| {
+                let read_tiles = |page: u8| {
                     let mut buf: [u8; 128 * 128 * 3] = [0; 49152];
 
-                    for x in 0_usize..128 {
-                        for y in 0_usize..128 {
+                    for x in 0..128 {
+                        for y in 0..128 {
                             let tile_x = x / 8;
                             let tile_y = y / 8;
 
-                            let base = (tile_y * 16 + tile_x) * 16;
-                            let pixel_l = (chr[offset + base + y % 8] >> (7 - x % 8)) & 0x1;
-                            let pixel_r = (chr[offset + base + 8 + y % 8] >> (7 - x % 8)) & 0x1;
-                            let pixel = (pixel_r << 1) | pixel_l;
+                            let pixel = emu.cpu.bus.ppu.get_sprite_pixel(
+                                page,
+                                tile_x,
+                                tile_y,
+                                x % 8,
+                                y % 8,
+                            );
 
                             let color = match pixel {
                                 0 => Color32::BLACK,
@@ -352,7 +354,7 @@ impl NemuApp {
                                 _ => unreachable!(),
                             };
 
-                            let base = ((y * 128) + x) * 3;
+                            let base = ((y as usize * 128) + x as usize) * 3;
                             buf[base] = color.r();
                             buf[base + 1] = color.g();
                             buf[base + 2] = color.b();
@@ -362,7 +364,7 @@ impl NemuApp {
                     ColorImage::from_rgb([128, 128], &buf)
                 };
 
-                let pt1_img = read_tiles(0x0000);
+                let pt1_img = read_tiles(0);
                 self.pt1.set(
                     pt1_img,
                     TextureOptions {
@@ -373,7 +375,7 @@ impl NemuApp {
                 let pt1_image = egui::Image::from_texture(SizedTexture::from(&self.pt1))
                     .fit_to_exact_size(Vec2::new(256., 256.));
 
-                let pt2_img = read_tiles(0x1000);
+                let pt2_img = read_tiles(1);
                 self.pt2.set(
                     pt2_img,
                     TextureOptions {
