@@ -275,11 +275,10 @@ impl Ppu {
             let tile_y = pt_tile_y as u8;
 
             let tile_i = tile_y as usize * 32 + tile_x as usize;
-            let pattern_table = 0;
-            let nametable_byte = cart.read_nametable_tile(self, pattern_table, tile_x, tile_y);
+            let nametable_byte = cart.read_nametable_tile(self, 0, tile_x, tile_y);
             let dx = (self.col % 8) as u8;
             let dy = (self.scanline % 8) as u8;
-            let pixel = cart.get_sprite_i_pixel(pattern_table, nametable_byte, dx, dy);
+            let pixel = cart.get_sprite_i_pixel(0, nametable_byte, dx, dy);
 
             let color = match pixel {
                 0 => (0, 0, 0),

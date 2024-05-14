@@ -2,7 +2,7 @@ use crate::{
     apu::Apu,
     cart::Cart,
     cpu::{Cpu, CpuBus},
-    ppu::{self, Ppu},
+    ppu::{self, Display, Ppu},
 };
 
 pub struct Emulator {
@@ -13,30 +13,11 @@ pub struct Emulator {
 }
 
 impl Emulator {
-    pub fn render_frame(&mut self) -> &ppu::Display {
-        let Emulator {
-            cpu,
-            apu,
-            ppu,
-            cart,
-        } = self;
-
-        while !ppu.frame_end {
-            if ppu.nmi {
-                cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
-            }
-
-            ppu.nmi = false;
-
-            let cpu_cycles = cpu.tick(&mut CpuBus { apu, ppu, cart });
-
-            for _ in 0..cpu_cycles * 3 {
-                ppu.cycle(cart);
-            }
+    pub fn step_frame(&mut self) {
+        while !self.ppu.frame_end {
+            self.step();
         }
-        ppu.frame_end = false;
-
-        self.ppu.display()
+        self.ppu.frame_end = false;
     }
 
     pub fn reset(&mut self) {
@@ -44,6 +25,31 @@ impl Emulator {
         self.apu.reset();
         self.ppu.reset();
         self.cart.reset();
+    }
+
+    pub fn step(&mut self) {
+        let Emulator {
+            cpu,
+            apu,
+            ppu,
+            cart,
+        } = self;
+
+        if ppu.nmi {
+            cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
+        }
+
+        ppu.nmi = false;
+
+        let cpu_cycles = cpu.tick(&mut CpuBus { apu, ppu, cart });
+
+        for _ in 0..cpu_cycles * 3 {
+            ppu.cycle(cart);
+        }
+    }
+
+    pub fn display(&self) -> &Display {
+        self.ppu.display()
     }
 
     pub fn new(cart: Cart) -> Self {

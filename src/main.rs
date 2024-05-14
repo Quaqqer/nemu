@@ -1,14 +1,15 @@
 #![allow(clippy::new_without_default, clippy::single_match)]
 #![feature(let_chains)]
 
-use std::collections::VecDeque;
-
 use eframe::egui::{
     self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, TextureHandle,
     TextureOptions, Vec2,
 };
 use egui::Id;
-use nemu::{cpu::CpuBus, emulator::Emulator};
+use nemu::{
+    cpu::{Cpu, CpuBus},
+    emulator::Emulator,
+};
 
 fn main() {
     let native_options = eframe::NativeOptions {
@@ -24,8 +25,6 @@ fn main() {
     .expect("Shouldn't just crash?");
 }
 
-const OP_HISTORY_LIMIT: usize = 10;
-
 struct NemuApp {
     // Emulator stuff
     emulator: Option<nemu::emulator::Emulator>,
@@ -33,9 +32,6 @@ struct NemuApp {
     tex: TextureHandle,
     pt1: TextureHandle,
     pt2: TextureHandle,
-
-    // Disassembler
-    op_history: VecDeque<String>,
 
     // UI State
     cpu_debug_open: bool,
@@ -79,8 +75,6 @@ impl NemuApp {
             pt1,
             pt2,
 
-            op_history: Default::default(),
-
             cpu_debug_open: false,
             pattern_tables_open: false,
         }
@@ -108,10 +102,12 @@ impl NemuApp {
 
 impl eframe::App for NemuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if let Some(emu) = self.emulator.as_mut()
-            && !self.paused
-        {
-            let frame = emu.render_frame();
+        if let Some(emu) = self.emulator.as_mut() {
+            if !self.paused {
+                emu.step_frame();
+            }
+
+            let frame = emu.display();
             self.tex.set(
                 ColorImage::from_rgb([256, 240], &frame.pixels),
                 TextureOptions {
@@ -193,6 +189,32 @@ impl eframe::App for NemuApp {
         self.cpu_debug_window(ctx);
         self.pattern_tables_window(ctx);
     }
+
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        for ev in &raw_input.events {
+            match ev {
+                egui::Event::Key {
+                    key, pressed: true, ..
+                } => match key {
+                    egui::Key::P => {
+                        self.paused ^= true;
+                    }
+                    egui::Key::N => {
+                        if let Some(emu) = self.emulator.as_mut() {
+                            emu.step();
+                        }
+                    }
+                    egui::Key::F => {
+                        if let Some(emu) = self.emulator.as_mut() {
+                            emu.step_frame();
+                        }
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+    }
 }
 
 impl NemuApp {
@@ -211,6 +233,7 @@ impl NemuApp {
                     ppu,
                     cart,
                 } = emu;
+
                 let cpu_bus = &mut CpuBus { apu, ppu, cart };
 
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
@@ -247,76 +270,61 @@ impl NemuApp {
                 });
 
                 egui::scroll_area::ScrollArea::new([false, true]).show(ui, |ui| {
-                    for history_label in &self.op_history {
-                        ui.label(history_label);
-                    }
+                        for i in 0..Cpu::HISTORY_LEN {
+                            let history_i = cpu.history_i.wrapping_sub(i) % Cpu::HISTORY_LEN;
+                            let offset = cpu.history[history_i];
 
-                    let mut offset = cpu.pc;
-                    for i in 0..10 {
-                        if let Some(opcode) = cpu.inspect_mem8(cpu_bus, cpu.pc) {
-                            let (op, addr_mode, _, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
+                            if let Some(opcode) = cpu.inspect_mem8(cpu_bus, offset) {
+                                let (op, addr_mode, _, _) = &nemu::op::OPCODE_MATRIX[opcode as usize];
 
-                            macro_rules! read_8(($base:expr, $offset:expr) => {
-                                cpu.inspect_mem8(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("{:02x}", v)).unwrap_or("??".to_string())
-                            });
+                                macro_rules! read_8(($base:expr, $offset:expr) => {
+                                    cpu.inspect_mem8(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
+                                });
 
-                            macro_rules! read_16(($base:expr, $offset:expr) => {
-                                cpu.inspect_mem16(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("{:04x}", v)).unwrap_or("????".to_string())
-                            });
+                                macro_rules! read_16(($base:expr, $offset:expr) => {
+                                    cpu.inspect_mem16(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("${:04x}", v)).unwrap_or("$????".to_string())
+                                });
 
+                                let addr_format = match addr_mode {
+                                    nemu::op::AddrMode::Acc => "A {{ACC}}".to_string(),
+                                    nemu::op::AddrMode::Imm => {
+                                        format!("#{} {{IMM}}", read_8!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::Zp0 => format!("{} {{ZP}}", read_8!(offset, 1)),
+                                    nemu::op::AddrMode::ZpX => {
+                                        format!("{},x {{ZPX}}", read_8!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::ZpY => {
+                                        format!("{},y {{ZPY}}", read_8!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::Abs => {
+                                        format!("{} {{ABS}}", read_16!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::AbX => {
+                                        format!("{},x {{ABX}}", read_16!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::AbY => {
+                                        format!("{},y {{ABY}}", read_16!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::Rel => {
+                                        format!("{} {{REL}}", read_8!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::Ind => {
+                                        format!("{} {{IND}}", read_16!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::IdX => {
+                                        format!("{},x {{IDX}}", read_16!(offset, 1))
+                                    }
+                                    nemu::op::AddrMode::IdY => {
+                                        format!("{},y {{IDY}}", read_16!(offset, 1))
+                                    }
+                                };
 
-                            let addr_format = match addr_mode {
-                                nemu::op::AddrMode::Acc => "A {{ACC}}".to_string(),
-                                nemu::op::AddrMode::Imm => {
-                                    format!("#{} {{IMM}}", read_8!(offset, 1))
-                                }
-                                nemu::op::AddrMode::Zp0 => format!("{} {{ZP}}", read_8!(offset, 1)),
-                                nemu::op::AddrMode::ZpX => {
-                                    format!("{},x {{ZPX}}", read_8!(offset, 1))
-                                }
-                                nemu::op::AddrMode::ZpY => {
-                                    format!("{},y {{ZPY}}", read_8!(offset, 1))
-                                }
-                                nemu::op::AddrMode::Abs => {
-                                    format!("{} {{ABS}}", read_16!(offset, 1))
-                                }
-                                nemu::op::AddrMode::AbX => {
-                                    format!("{},x {{ABX}}", read_16!(offset, 1))
-                                }
-                                nemu::op::AddrMode::AbY => {
-                                    format!("{},y {{ABY}}", read_16!(offset, 1))
-                                }
-                                nemu::op::AddrMode::Rel => {
-                                    format!("{} {{REL}}", read_8!(offset, 1))
-                                }
-                                nemu::op::AddrMode::Ind => {
-                                    format!("{} {{IND}}", read_16!(offset, 1))
-                                }
-                                nemu::op::AddrMode::IdX => {
-                                    format!("{},x {{IDX}}", read_16!(offset, 1))
-                                }
-                                nemu::op::AddrMode::IdY => {
-                                    format!("{},y {{IDY}}", read_16!(offset, 1))
-                                }
-                            };
+                                let s = format!("${:#04x}: {} {}", offset, op, addr_format);
 
-                            let s = format!("${:#04x}: {} {}", offset, op, addr_format);
-
-                            offset = offset
-                                .wrapping_add(1)
-                                .wrapping_add(addr_mode.fetched_bytes() as u16);
-
-                            if i == 0 {
-                                // TODO: This is wrong since we tick an entire frame instead of
-                                // a cpu instruction
-                                self.op_history.push_back(s.clone());
-
-                                if self.op_history.len() > OP_HISTORY_LIMIT {
-                                    self.op_history.pop_front();
-                                }
-                            }
-
-                            ui.label(s);
+                                ui.label(s);
+                            } else {
+                            ui.label("$???? ?");
                         }
                     }
                 });

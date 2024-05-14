@@ -32,6 +32,9 @@ pub struct Cpu {
     pub cyc: u64,
 
     pub ram: [u8; 0x800],
+
+    pub history: [u16; Self::HISTORY_LEN],
+    pub history_i: usize,
 }
 
 pub struct CpuBus<'a> {
@@ -74,6 +77,8 @@ enum Addr {
 }
 
 impl Cpu {
+    pub const HISTORY_LEN: usize = 64;
+
     fn read_mem8(&mut self, bus: &mut CpuBus, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
@@ -173,6 +178,9 @@ impl Cpu {
             cyc: 7,
 
             ram: [0x00; 0x800],
+
+            history: [0x0; 64],
+            history_i: Self::HISTORY_LEN - 1,
         }
     }
 
@@ -269,6 +277,9 @@ impl Cpu {
     }
 
     pub fn tick(&mut self, bus: &mut CpuBus) -> u64 {
+        self.history_i = (self.history_i + 1) % Self::HISTORY_LEN;
+        self.history[self.history_i] = self.pc;
+
         let start_cycle = self.cyc;
 
         let opcode = self.fetch8(bus);

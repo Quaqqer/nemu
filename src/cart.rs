@@ -225,6 +225,8 @@ impl Cart {
             },
         }
     }
+    //
+    // pub fn read_attribute(&mut self, ppu: &mut Ppu, tile_i: u16) ->
 }
 
 #[derive(Clone, Copy)]
