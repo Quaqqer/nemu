@@ -830,13 +830,12 @@ impl Cpu {
         }
     }
 
-    fn nmi_interrupt(&mut self, bus: &mut CpuBus) {
+    pub fn nmi_interrupt(&mut self, bus: &mut CpuBus) {
         self.push16(bus, self.pc);
         let flags = self.p | P::B;
         self.push8(bus, flags.bits());
         self.p |= P::INTERRUPT_DISABLE;
         self.pc = self.read_mem16(bus, 0xfffa);
-        // TODO: Might want to do two ppu cycles here?
     }
 
     fn tas(&self, bus: &mut CpuBus) {

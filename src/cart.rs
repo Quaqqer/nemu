@@ -119,11 +119,16 @@ impl Cart {
     /// * `sprite_x`: The sprite x coordinate
     /// * `sprite_y`: The sprite y coordinate
     pub fn get_sprite(&self, page: u8, sprite_x: u8, sprite_y: u8) -> &[u8] {
-        debug_assert!(page <= 1);
         debug_assert!(sprite_x <= 0xF);
         debug_assert!(sprite_y <= 0xF);
 
-        let base = page as usize * 0x1000 + ((sprite_y as usize * 16 + sprite_x as usize) * 16);
+        self.get_sprite_i(page, sprite_y * 8 + sprite_x)
+    }
+
+    pub fn get_sprite_i(&self, page: u8, sprite_i: u8) -> &[u8] {
+        debug_assert!(page <= 1);
+
+        let base = page as usize * 0x1000 + sprite_i as usize * 16;
         &self.chr[base..base + 16]
     }
 
@@ -142,10 +147,11 @@ impl Cart {
         x_offset: u8,
         y_offset: u8,
     ) -> u8 {
-        debug_assert!(x_offset <= 0x8);
-        debug_assert!(y_offset <= 0x8);
+        self.get_sprite_i_pixel(page, sprite_y * 8 + sprite_x, x_offset, y_offset)
+    }
 
-        let sprite = self.get_sprite(page, sprite_x, sprite_y);
+    pub fn get_sprite_i_pixel(&self, page: u8, sprite_i: u8, x_offset: u8, y_offset: u8) -> u8 {
+        let sprite = self.get_sprite_i(page, sprite_i);
         let l = (sprite[y_offset as usize] >> (7 - x_offset)) & 1;
         let r = (sprite[y_offset as usize + 8] >> (7 - x_offset)) & 1;
         (r << 1) | l
@@ -164,6 +170,16 @@ impl Cart {
         debug_assert!(pattern_table <= 1);
 
         self.chr[0x1000 * pattern_table as usize + addr as usize] = v
+    }
+
+    pub fn read_nametable_tile(
+        &mut self,
+        ppu: &mut Ppu,
+        nametable: u8,
+        tile_x: u8,
+        tile_y: u8,
+    ) -> u8 {
+        self.read_nametable(ppu, nametable, tile_y as u16 * 32 + tile_x as u16)
     }
 
     pub fn read_nametable(&mut self, ppu: &mut Ppu, nametable: u8, addr: u16) -> u8 {

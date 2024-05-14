@@ -81,7 +81,7 @@ pub struct Ppu {
     next_at: u8,
     next_pt: u16,
 
-    nmi: bool,
+    pub nmi: bool,
     pub frame_end: bool,
 
     display: Display,
@@ -241,7 +241,7 @@ impl Ppu {
         self.ppustatus -= PpuStatus::SPRITE_0_HIT;
     }
 
-    pub fn cycle(&mut self, cart: &Cart) {
+    pub fn cycle(&mut self, cart: &mut Cart) {
         let screen_x = self.col;
         let screen_y = self.scanline;
 
@@ -271,13 +271,24 @@ impl Ppu {
         let pt_tile_y = pt_y / 8;
 
         if self.col < 256 && self.scanline < 240 {
-            let color = match rand::random::<u8>() & 0b11 {
+            let tile_x = pt_tile_x as u8;
+            let tile_y = pt_tile_y as u8;
+
+            let tile_i = tile_y as usize * 32 + tile_x as usize;
+            let pattern_table = 0;
+            let nametable_byte = cart.read_nametable_tile(self, pattern_table, tile_x, tile_y);
+            let dx = (self.col % 8) as u8;
+            let dy = (self.scanline % 8) as u8;
+            let pixel = cart.get_sprite_i_pixel(pattern_table, nametable_byte, dx, dy);
+
+            let color = match pixel {
                 0 => (0, 0, 0),
                 1 => (125, 0, 0),
                 2 => (0, 125, 0),
                 3 => (0, 0, 125),
                 _ => unreachable!(),
             };
+
             self.display
                 .set_pixel(self.col as usize, self.scanline as usize, color);
         }

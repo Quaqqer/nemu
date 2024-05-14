@@ -389,5 +389,8 @@ impl NemuApp {
                     ui.add(pt2_image);
                 });
             });
+
+        // Always repaint
+        ctx.request_repaint();
     }
 }

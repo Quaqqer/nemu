@@ -22,7 +22,13 @@ impl Emulator {
         } = self;
 
         while !ppu.frame_end {
-            let cpu_cycles = self.cpu.tick(&mut CpuBus { apu, ppu, cart });
+            if ppu.nmi {
+                cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
+            }
+
+            ppu.nmi = false;
+
+            let cpu_cycles = cpu.tick(&mut CpuBus { apu, ppu, cart });
 
             for _ in 0..cpu_cycles * 3 {
                 ppu.cycle(cart);
