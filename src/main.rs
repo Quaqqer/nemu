@@ -62,7 +62,7 @@ impl NemuApp {
 
         let tex = empty_tex("tex", 256, 240);
         let pt1 = empty_tex("pt1", 256, 256);
-        let pt2 = empty_tex("pt1", 256, 256);
+        let pt2 = empty_tex("pt2", 256, 256);
         let nt1 = empty_tex("nt1", 32 * 8, 30 * 8);
         let nt2 = empty_tex("nt1", 32 * 8, 30 * 8);
         let nt3 = empty_tex("nt1", 32 * 8, 30 * 8);
@@ -392,7 +392,7 @@ impl NemuApp {
                     return;
                 };
 
-                let read_tiles = |page: u8| {
+                let read_tiles = |tex: &mut TextureHandle, page: u8| {
                     let mut buf: [u8; 128 * 128 * 3] = [0; 49152];
 
                     for x in 0..128 {
@@ -419,34 +419,24 @@ impl NemuApp {
                         }
                     }
 
-                    ColorImage::from_rgb([128, 128], &buf)
+                    let cimg = ColorImage::from_rgb([128, 128], &buf);
+                    tex.set(
+                        cimg,
+                        TextureOptions {
+                            magnification: egui::TextureFilter::Nearest,
+                            ..Default::default()
+                        },
+                    );
+                    egui::Image::from_texture(SizedTexture::from(&*tex))
+                        .fit_to_exact_size(Vec2::new(256., 256.))
                 };
 
-                let pt1_img = read_tiles(0);
-                self.pt1.set(
-                    pt1_img,
-                    TextureOptions {
-                        magnification: egui::TextureFilter::Nearest,
-                        ..Default::default()
-                    },
-                );
-                let pt1_image = egui::Image::from_texture(SizedTexture::from(&self.pt1))
-                    .fit_to_exact_size(Vec2::new(256., 256.));
-
-                let pt2_img = read_tiles(1);
-                self.pt2.set(
-                    pt2_img,
-                    TextureOptions {
-                        magnification: egui::TextureFilter::Nearest,
-                        ..Default::default()
-                    },
-                );
-                let pt2_image = egui::Image::from_texture(SizedTexture::from(&self.pt2))
-                    .fit_to_exact_size(Vec2::new(256., 256.));
+                let pt1 = read_tiles(&mut self.pt1, 0);
+                let pt2 = read_tiles(&mut self.pt2, 1);
 
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                    ui.add(pt1_image);
-                    ui.add(pt2_image);
+                    ui.add(pt1);
+                    ui.add(pt2);
                 });
             });
     }
@@ -463,7 +453,7 @@ impl NemuApp {
                 // Assumes that pattern tables are stored in vram
                 let Emulator { ppu, cart, .. } = emu;
 
-                let set_nt = |tex: &mut TextureHandle, nt: u8| {
+                let nt_img = |tex: &mut TextureHandle, nt: u8| {
                     let mut buf: [u8; 30 * 32 * 8 * 8 * 3] = [0; 184320];
                     for row in 0..30 {
                         for col in 0..32 {
@@ -503,28 +493,17 @@ impl NemuApp {
                             ..Default::default()
                         },
                     );
+                    egui::Image::from_texture(SizedTexture::from(&*tex))
+                        .fit_to_exact_size(Vec2::new(32. * 8., 30. * 8.))
                 };
-                set_nt(&mut self.nt1, 0);
-                set_nt(&mut self.nt2, 1);
-                set_nt(&mut self.nt3, 2);
-                set_nt(&mut self.nt4, 3);
 
                 egui::Grid::new("nametable_grid").show(ui, |ui| {
-                    macro_rules! add_img {
-                        ($tex:expr) => {
-                            ui.add(
-                                egui::Image::from_texture(SizedTexture::from($tex))
-                                    .fit_to_exact_size(Vec2::new(32. * 8., 30. * 8.)),
-                            );
-                        };
-                    }
-
-                    add_img!(&self.nt1);
-                    add_img!(&self.nt2);
+                    ui.add(nt_img(&mut self.nt1, 0));
+                    ui.add(nt_img(&mut self.nt2, 1));
                     ui.end_row();
 
-                    add_img!(&self.nt3);
-                    add_img!(&self.nt4);
+                    ui.add(nt_img(&mut self.nt3, 2));
+                    ui.add(nt_img(&mut self.nt4, 3));
                     ui.end_row();
                 });
             });

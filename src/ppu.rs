@@ -190,7 +190,6 @@ impl Ppu {
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
-            println!("ppu addr: ${:#04x}", addr);
             match (addr - 0x2000) % 8 {
                 // Control
                 0 => {
@@ -243,7 +242,6 @@ impl Ppu {
                 }
                 // Data
                 7 => {
-                    println!("Write data ${:#02x} to addr ${:#04x}", v, self.v);
                     self.write_mem(cart, self.v, v);
                     self.v = self.v.wrapping_add(self.ppudata_increase());
                 }
@@ -274,79 +272,65 @@ impl Ppu {
 
     fn render_bg(&mut self, cart: &mut Cart) {
         // Pre-render scanline
-        match self.scanline {
+        let cycle = self.cycle;
+        let scanline = self.scanline;
+
+        match scanline {
             0..240 => {
-                self.fine_x = (self.fine_x + 1) % 8;
-
                 // Visible scanlines
-                match self.cycle {
-                    0 => {
-                        // Reset coarse x
-                        self.v &= !(0b0100_00011111);
-                        self.v |= self.t & (0b0100_00011111);
-                        self.fine_x = 0;
+                if cycle % 8 == 0 {
+                    self.set_nexts();
+                }
 
-                        self.set_nexts();
-                        self.draw_px();
-
-                        // println!(
-                        //     "{},{} - v: ${:#04x}, t: ${:#04x}, fine_x: {}, nt_addr: ${:#04x}, nt: {}, at: ${:#02x}, pt_low: ${:#02x}, pt_high: ${:#02x}",
-                        //     self.cycle, self.scanline, self.v, self.t, self.fine_x, 0x2000 | (self.v & 0x0FFF), self.nt, self.at, self.pt_low, self.pt_high
-                        // );
-                    }
-                    1..256 => {
-                        // Fetches
-                        match self.cycle % 8 {
-                            0 => {
-                                self.set_nexts();
-                                self.inc_coarse_x();
-                            }
-                            1 => self.next_nt = self.fetch_nt(cart),
-                            3 => self.next_at = self.fetch_at(cart),
-                            5 => self.next_pt_low = self.fetch_pt_low(cart, self.next_nt),
-                            7 => self.next_pt_high = self.fetch_pt_high(cart, self.next_nt),
-                            _ => {}
-                        }
-
-                        self.draw_px();
+                // Scroll
+                match cycle {
+                    8..256 if cycle % 8 == 0 => {
+                        self.inc_coarse_x();
                     }
                     256 => {
-                        self.set_nexts();
+                        self.inc_coarse_x();
                         self.inc_fine_y();
                     }
-                    // TODO: Some special behaviour for these cycles
-                    // Garbage fetches
-                    257..321 => match self.cycle % 8 {
-                        0 => self.set_nexts(),
-                        1 => self.next_nt = self.fetch_nt(cart),
-                        3 => self.next_at = self.fetch_at(cart),
-                        5 => self.next_pt_low = self.fetch_pt_low(cart, self.next_nt),
-                        7 => self.next_pt_high = self.fetch_pt_high(cart, self.next_nt),
-                        _ => {}
-                    },
-                    321..337 => match self.cycle % 8 {
-                        0 => self.set_nexts(),
-                        1 => self.next_nt = self.fetch_nt(cart),
-                        3 => self.next_at = self.fetch_at(cart),
-                        5 => self.next_pt_low = self.fetch_pt_low(cart, self.next_nt),
-                        7 => self.next_pt_high = self.fetch_pt_high(cart, self.next_nt),
-                        _ => {}
-                    },
-                    337..341 => {
-                        if [337, 339].contains(&self.cycle) {
-                            self.next_nt = self.fetch_nt(cart);
-                        }
+                    257 => {
+                        self.reset_coarse_x();
                     }
-                    _ => unreachable!(),
+                    328 | 336 => self.inc_coarse_x(),
+                    _ => {}
                 }
+
+                // Fetches
+                match cycle {
+                    0..=255 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    0..=255 if cycle % 8 == 3 => self.fetch_at(cart),
+                    0..=255 if cycle % 8 == 5 => self.fetch_pt_low(cart),
+                    0..=255 if cycle % 8 == 7 => self.fetch_pt_high(cart),
+
+                    257..=320 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    257..=320 if cycle % 8 == 3 => self.fetch_nt(cart),
+
+                    321..=336 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    321..=336 if cycle % 8 == 3 => self.fetch_at(cart),
+                    321..=336 if cycle % 8 == 5 => self.fetch_pt_low(cart),
+                    321..=336 if cycle % 8 == 7 => self.fetch_pt_high(cart),
+                    337 | 339 => self.fetch_nt(cart),
+                    _ => {}
+                }
+
+                if cycle < 256 {
+                    self.draw_px();
+                }
+
+                self.fine_x = (self.fine_x + 1) % 8;
             }
+
             // Post-render scanline, idle
             240 => {}
             // Vertical blanking lines
             241 => {
                 if self.cycle == 1 {
-                    self.ppustatus |= PpuStatus::VBLANK;
+                    // Start vblank
                     // Remove sprite 0 hit on vblank?
+                    self.ppustatus |= PpuStatus::VBLANK;
                     self.frame_end = true;
                     self.nmi = true;
                 }
@@ -354,14 +338,37 @@ impl Ppu {
             242..261 => {}
             // Pre-render scanline
             261 => {
-                if self.cycle == 1 {
-                    self.ppustatus -= PpuStatus::VBLANK;
+                // Special stuff
+                match cycle {
+                    // Clear vblank, sprite 0, sprite overflow
+                    1 => {
+                        self.ppustatus -= PpuStatus::VBLANK
+                            | PpuStatus::SPRITE_0_HIT
+                            | PpuStatus::SPRITE_OVERFLOW;
+                    }
+                    280..305 => {
+                        self.reset_coarse_y();
+                    }
+                    _ => {}
                 }
 
-                self.v &= !(0b111101111100000);
-                self.v |= self.t & (0b111101111100000);
+                // Fetches
+                match cycle {
+                    0..=255 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    0..=255 if cycle % 8 == 3 => self.fetch_at(cart),
+                    0..=255 if cycle % 8 == 5 => self.fetch_pt_low(cart),
+                    0..=255 if cycle % 8 == 7 => self.fetch_pt_high(cart),
 
-                // TODO dummy reads
+                    257..=320 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    257..=320 if cycle % 8 == 3 => self.fetch_nt(cart),
+
+                    321..=336 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    321..=336 if cycle % 8 == 3 => self.fetch_at(cart),
+                    321..=336 if cycle % 8 == 5 => self.fetch_pt_low(cart),
+                    321..=336 if cycle % 8 == 7 => self.fetch_pt_high(cart),
+                    337 | 339 => self.fetch_nt(cart),
+                    _ => {}
+                }
             }
             _ => unreachable!(),
         }
@@ -433,30 +440,29 @@ impl Ppu {
         self.pt_high = self.next_pt_high;
     }
 
-    fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
+    fn fetch_nt(&mut self, cart: &mut Cart) {
         let nt_addr = 0x2000 | (self.v & 0x0FFF);
-        self.read_mem(cart, nt_addr)
+        self.next_nt = self.read_mem(cart, nt_addr);
     }
 
-    fn fetch_at(&mut self, cart: &mut Cart) -> u8 {
+    fn fetch_at(&mut self, cart: &mut Cart) {
         let attr_addr =
             0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
-
-        self.read_mem(cart, attr_addr)
+        self.next_at = self.read_mem(cart, attr_addr);
     }
 
-    fn fetch_pt_low(&mut self, cart: &mut Cart, nt: u8) -> u8 {
-        cart.get_sprite_i(
+    fn fetch_pt_low(&mut self, cart: &mut Cart) {
+        self.next_pt_low = cart.get_sprite_i(
             self.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
-            nt,
-        )[self.fine_y() as usize]
+            self.next_nt,
+        )[self.fine_y() as usize];
     }
 
-    fn fetch_pt_high(&mut self, cart: &mut Cart, nt: u8) -> u8 {
-        cart.get_sprite_i(
+    fn fetch_pt_high(&mut self, cart: &mut Cart) {
+        self.next_pt_high = cart.get_sprite_i(
             self.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
-            nt,
-        )[8 + self.fine_y() as usize]
+            self.next_nt,
+        )[8 + self.fine_y() as usize];
     }
 
     fn fine_y(&self) -> u8 {
@@ -510,6 +516,16 @@ impl Ppu {
         };
 
         self.display.set_pixel(x as usize, y as usize, rgb);
+    }
+
+    fn reset_coarse_x(&mut self) {
+        self.v &= !(0b0100_00011111);
+        self.v |= self.t & (0b0100_00011111);
+    }
+
+    fn reset_coarse_y(&mut self) {
+        self.v &= !(0b111101111100000);
+        self.v |= self.t & (0b111101111100000);
     }
 }
 
