@@ -1,7 +1,7 @@
 use crate::apu::Apu;
+use crate::cart::Cart;
 use crate::op::{AddrMode, Op, OPCODE_MATRIX};
 use crate::ppu::Ppu;
-use crate::{cart::Cart, ppu::Display};
 use bitflags::bitflags;
 
 /// The status register
@@ -42,15 +42,6 @@ pub struct CpuBus<'a> {
     pub ppu: &'a mut Ppu,
     pub cart: &'a mut Cart,
 }
-
-const FLAG_CARRY: u8 = 1 << 0;
-const FLAG_ZERO: u8 = 1 << 1;
-const FLAG_INTERRUPT_DISABLE: u8 = 1 << 2;
-const FLAG_DECIMAL: u8 = 1 << 3;
-const FLAG_B: u8 = 1 << 4;
-const FLAG_5: u8 = 1 << 5;
-const FLAG_OVERFLOW: u8 = 1 << 6;
-const FLAG_NEGATIVE: u8 = 1 << 7;
 
 impl std::fmt::Debug for Cpu {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -675,7 +666,7 @@ impl Cpu {
     }
 
     fn php(&mut self, bus: &mut CpuBus) {
-        let p = (self.p | P::_5 | P::B);
+        let p = self.p | P::_5 | P::B;
         self.push8(bus, p.bits());
     }
 

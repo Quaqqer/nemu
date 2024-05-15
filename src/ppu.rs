@@ -1,5 +1,5 @@
 use crate::cart::Cart;
-use bitflags::{bitflags, Flags};
+use bitflags::bitflags;
 
 #[derive(Clone, Copy)]
 pub struct PpuCtrl(u8);
@@ -56,35 +56,40 @@ bitflags! {
 }
 
 pub struct Ppu {
+    // Registers
     ppuctrl: PpuCtrl,
     ppumask: PpuMask,
     ppustatus: PpuStatus,
     oamaddr: u8,
-    latch: u8,
     latch_toggle: bool,
-    ppuscroll: u16,
-    ppuaddr: u16,
+    t: u16,
+    v: u16,
     oamdma: u8,
+
+    // Current PPU position
+    scanline: u16,
+    cycle: u16,
+
+    fine_x: u8,
 
     pub vram: [u8; 0x800],
     palette: [u8; 0x20],
     pub oam: [u8; 0x100],
     odd: bool,
 
-    scanline: u16,
-    col: u16,
-
-    nt: u8,
-    at: u8,
-    pt: u16,
-    next_nt: u8,
-    next_at: u8,
-    next_pt: u16,
-
     pub nmi: bool,
     pub frame_end: bool,
 
     display: Display,
+
+    nt: u8,
+    at: u8,
+    pt_low: u8,
+    pt_high: u8,
+    next_nt: u8,
+    next_at: u8,
+    next_pt_low: u8,
+    next_pt_high: u8,
 }
 
 impl Ppu {
@@ -95,10 +100,9 @@ impl Ppu {
             ppumask: PpuMask::empty(),
             ppustatus: PpuStatus::SPRITE_OVERFLOW | PpuStatus::VBLANK,
             oamaddr: 0x00,
-            latch: 0x00,
             latch_toggle: false,
-            ppuscroll: 0x0000,
-            ppuaddr: 0x0000,
+            t: 0x0000,
+            v: 0x0000,
             oamdma: 0x00,
 
             vram: [0x00; 0x800],
@@ -106,20 +110,24 @@ impl Ppu {
             oam: [0x00; 256],
             odd: false,
 
-            scanline: 0,
-            col: 0,
+            scanline: 261,
+            cycle: 0,
 
-            nt: 0,
-            at: 0,
-            pt: 0,
-            next_nt: 0,
-            next_at: 0,
-            next_pt: 0,
+            fine_x: 0,
 
             nmi: false,
             frame_end: false,
 
             display: Display::new(),
+
+            nt: 0,
+            at: 0,
+            pt_low: 0,
+            pt_high: 0,
+            next_nt: 0,
+            next_at: 0,
+            next_pt_low: 0,
+            next_pt_high: 0,
         }
     }
 
@@ -137,20 +145,32 @@ impl Ppu {
             0
         } else {
             match (addr - 0x2000) % 0x8 {
-                0x0 => 0,
-                0x1 => 0,
-                0x2 => {
+                // Control
+                0 => 0,
+                // Mask
+                1 => 0,
+                // Status
+                2 => {
                     let status = self.ppustatus.bits();
                     self.ppustatus -= PpuStatus::VBLANK;
-                    self.latch = 0x00;
                     self.latch_toggle = false;
                     status
                 }
-                0x3 => 0,
-                0x4 => self.oam[self.oamaddr as usize],
-                0x5 => self.latch,
-                0x6 => self.latch,
-                0x7 => self.read_ppudata(cart),
+                // OAM address
+                3 => 0,
+                // OAM data
+                4 => self.oam[self.oamaddr as usize],
+                // Scroll
+                5 => 0,
+                // Addr
+                6 => 0,
+                // Write data
+                7 => {
+                    // TODO: Some stuff should be done different here apparently
+                    let v = self.read_mem(cart, self.v);
+                    self.v = self.v.wrapping_add(self.ppudata_increase());
+                    v
+                }
                 _ => unreachable!(),
             }
         }
@@ -165,46 +185,66 @@ impl Ppu {
     /// * `addr`: The memory address
     /// * `v`: The value
     pub(crate) fn cpu_write_register(&mut self, cart: &mut Cart, addr: u16, v: u8) {
-        debug_assert!((0x2000..0x4000).contains(&addr));
+        debug_assert!((0x2000..0x4000).contains(&addr) || addr == 0x4014);
 
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
             match (addr - 0x2000) % 0x8 {
-                0x0 => {
-                    // TODO: If currently in a vblank and PPUSTATUS vblank flag is set, setting nmi
-                    // flag will generate NMI.
-                    //
-                    // Master/slave mode and EXT pins
-                    //
-                    // https://www.nesdev.org/wiki/PPU_registers#Controller_($2000)_%3E_write
-                    self.ppuctrl = PpuCtrl::from_bits(v).unwrap()
+                // Control
+                0 => {
+                    self.ppuctrl = PpuCtrl::from_bits(v).unwrap();
+                    self.t &= !(0b11 << 10);
+                    self.t |= (v as u16 & 0b11) << 10;
                 }
-                0x1 => self.ppumask = PpuMask::from_bits(v).unwrap(),
-                0x2 => {}
-                0x3 => self.oamaddr = v,
-                0x4 => {
+                // Mask
+                1 => self.ppumask = PpuMask::from_bits(v).unwrap(),
+                // Status
+                2 => {}
+                // OAM Address
+                3 => self.oamaddr = v,
+                // OAM data
+                4 => {
                     self.oam[self.oamaddr as usize] = v;
                     self.oamaddr = self.oamaddr.wrapping_add(1);
                 }
-                0x5 => {
-                    if self.latch_toggle {
-                        self.ppuscroll = ((self.latch as u16) << 8) + v as u16;
-                    } else {
-                        self.latch = v;
-                    }
-                    self.latch_toggle = !self.latch_toggle;
-                }
-                0x6 => {
-                    if self.latch_toggle {
-                        self.ppuaddr = ((self.latch as u16) << 8) + v as u16;
-                    } else {
-                        self.latch = v;
-                    }
-                    self.latch_toggle = !self.latch_toggle;
-                }
+                // Scroll
+                5 => {
+                    if !self.latch_toggle {
+                        // Set fine x
+                        self.fine_x = v & 0b111;
 
-                0x7 => self.write_ppudata(cart, v),
+                        // Set coarse x
+                        self.t &= !(0b11111);
+                        self.t |= v as u16 >> 3;
+                    } else {
+                        // Set coarse y
+                        self.t &= !(0b11111 << 5);
+                        self.t |= ((v as u16 >> 3) & 0b11111) << 5;
+
+                        // Set fine x
+                        self.t &= !(0b111 << 12);
+                        self.t |= (v as u16 & 0b111) << 12;
+                    }
+                    self.latch_toggle = !self.latch_toggle;
+                }
+                // Addr
+                0x6 => {
+                    if !self.latch_toggle {
+                        self.t &= !(0b1111111 << 8);
+                        self.t |= (v as u16 & 0b111111) << 8;
+                    } else {
+                        self.t &= !0xFF;
+                        self.t |= v as u16;
+                        self.v = self.t;
+                    }
+                    self.latch_toggle = !self.latch_toggle;
+                }
+                // Write data
+                0x7 => {
+                    self.write_mem(cart, self.v, v);
+                    self.v = self.v.wrapping_add(self.ppudata_increase());
+                }
                 _ => unreachable!(),
             }
         }
@@ -230,112 +270,103 @@ impl Ppu {
     pub fn reset(&mut self) {
         self.ppuctrl = PpuCtrl::empty();
         self.ppumask = PpuMask::empty();
-        self.ppuscroll = 0x0000;
-        self.latch = 0x00;
+        self.t = 0x0000;
         self.latch_toggle = false;
 
         self.odd = false;
     }
 
-    fn vblank(&mut self) {
-        self.ppustatus -= PpuStatus::SPRITE_0_HIT;
+    pub fn cycle(&mut self, cart: &mut Cart) {
+        self.render_bg(cart);
     }
 
-    pub fn cycle(&mut self, cart: &mut Cart) {
-        let screen_x = self.col;
-        let screen_y = self.scanline;
+    fn render_bg(&mut self, cart: &mut Cart) {
+        // Pre-render scanline
+        match self.scanline {
+            0..240 => {
+                self.fine_x = (self.fine_x + 1) % 8;
 
-        if self.col % 8 == 0 {
-            self.nt = self.next_nt;
-            self.at = self.next_at;
-            self.pt = self.next_pt;
-        }
+                // Visible scanlines
+                match self.cycle {
+                    0 => {
+                        self.set_nexts();
+                        self.draw_px();
+                    }
+                    1..256 => {
+                        // Fetches
+                        match self.cycle % 8 {
+                            0 => {
+                                self.set_nexts();
+                                self.inc_coarse_x();
+                            }
+                            1 => self.next_nt = self.fetch_nt(cart),
+                            3 => self.next_at = self.fetch_at(cart),
+                            5 => self.next_pt_low = self.fetch_pt_low(cart, self.next_nt),
+                            7 => self.next_pt_high = self.fetch_pt_high(cart, self.next_nt),
+                            _ => {}
+                        }
 
-        let pt_x = self.col
-            + (if self.ppuctrl.intersects(PpuCtrl::X) {
-                0x100
-            } else {
-                0x0
-            })
-            + (self.ppuscroll >> 8);
-
-        let pt_y = self.scanline
-            + (if self.ppuctrl.intersects(PpuCtrl::Y) {
-                0x100
-            } else {
-                0x0
-            })
-            + (self.ppuscroll & 0xFF);
-
-        let pt_tile_x = pt_x / 8;
-        let pt_tile_y = pt_y / 8;
-
-        if self.col < 256 && self.scanline < 240 {
-            let tile_x = pt_tile_x as u8;
-            let tile_y = pt_tile_y as u8;
-
-            let tile_i = tile_y as usize * 32 + tile_x as usize;
-            let nametable_byte = cart.read_nametable_tile(self, 0, tile_x, tile_y);
-            let dx = (self.col % 8) as u8;
-            let dy = (self.scanline % 8) as u8;
-            let pixel = cart.get_sprite_i_pixel(0, nametable_byte, dx, dy);
-
-            let color = match pixel {
-                0 => (0, 0, 0),
-                1 => (125, 0, 0),
-                2 => (0, 125, 0),
-                3 => (0, 0, 125),
-                _ => unreachable!(),
-            };
-
-            self.display
-                .set_pixel(self.col as usize, self.scanline as usize, color);
-        }
-
-        // Fetches
-        match self.col % 8 {
-            1 => {
-                // self.next_nt = self.read_mem
+                        self.draw_px();
+                    }
+                    256 => {
+                        self.set_nexts();
+                        self.inc_coarse_x();
+                        self.inc_fine_y();
+                    }
+                    // TODO: Some special behaviour for these cycles
+                    // Garbage fetches
+                    257..321 => match self.cycle % 8 {
+                        0 => self.set_nexts(),
+                        1 => self.next_nt = self.fetch_nt(cart),
+                        3 => self.next_at = self.fetch_at(cart),
+                        5 => self.next_pt_low = self.fetch_pt_low(cart, self.next_nt),
+                        7 => self.next_pt_high = self.fetch_pt_high(cart, self.next_nt),
+                        _ => {}
+                    },
+                    321..337 => match self.cycle % 8 {
+                        0 => self.set_nexts(),
+                        1 => self.next_nt = self.fetch_nt(cart),
+                        3 => self.next_at = self.fetch_at(cart),
+                        5 => self.next_pt_low = self.fetch_pt_low(cart, self.next_nt),
+                        7 => self.next_pt_high = self.fetch_pt_high(cart, self.next_nt),
+                        _ => {}
+                    },
+                    337..341 => {
+                        if [337, 339].contains(&self.cycle) {
+                            self.next_nt = self.fetch_nt(cart);
+                        }
+                    }
+                    _ => unreachable!(),
+                }
             }
-            3 => {
-                // TODO: Fetch palette
-                // self.next_at = todo!();
+            // Post-render scanline, idle
+            240 => {}
+            // Vertical blanking lines
+            241..261 => {
+                if self.cycle == 1 {
+                    self.ppustatus |= PpuStatus::VBLANK;
+                    // Remove sprite 0 hit on vblank?
+                    self.frame_end = true;
+                    self.nmi = true;
+                }
             }
-            5 => {
-                // self.next_pt_l = todo!();
+            // Pre-render scanline
+            261 => {
+                if self.cycle == 1 {
+                    self.ppustatus -= PpuStatus::VBLANK;
+                }
+
+                // TODO dummy reads
             }
-            7 => {
-                // self.next_pt_h = todo!();
-            }
-            _ => {}
+            _ => unreachable!(),
         }
 
-        let rendering_enabled = self
-            .ppumask
-            .intersects(PpuMask::SHOW_BACKGROUND | PpuMask::SHOW_SPRITES);
-
-        if self.scanline == 241 && self.col == 1 {
-            self.ppustatus |= PpuStatus::VBLANK;
-            self.frame_end = true;
-        }
-
-        if self.scanline == 261 && self.col == 1 {
-            self.ppustatus -= PpuStatus::VBLANK;
-        }
-
-        match (self.scanline, self.col, self.odd && rendering_enabled) {
-            // Skip 1 cycle if odd and rendering is enabled
-            (261, 340, _) | (261, 339, true) => {
-                self.col = 0;
+        self.cycle += 1;
+        if self.cycle > 340 {
+            self.cycle = 0;
+            self.scanline += 1;
+            if self.scanline > 261 {
                 self.scanline = 0;
-                self.odd = !self.odd;
-            }
-            (_, 340, _) => {
-                self.col = 0;
-                self.scanline += 1;
-            }
-            _ => {
-                self.col += 1;
             }
         }
     }
@@ -386,19 +417,91 @@ impl Ppu {
         }
     }
 
-    fn read_ppudata(&mut self, cart: &mut Cart) -> u8 {
-        let v = self.read_mem(cart, self.ppuaddr);
-        self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
+    pub fn display(&self) -> &Display {
+        &self.display
+    }
+
+    fn set_nexts(&mut self) {
+        self.nt = self.next_nt;
+        self.at = self.next_at;
+        self.pt_low = self.next_pt_low;
+        self.pt_high = self.next_pt_high;
+    }
+
+    fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
+        let addr = 0x2000 | (self.v & 0x0FFF);
+        let v = self.read_mem(cart, addr);
+        if v != 0 {
+            println!("Nt: {}", self.nt)
+        }
         v
     }
 
-    fn write_ppudata(&mut self, cart: &mut Cart, v: u8) {
-        self.write_mem(cart, self.ppuaddr, v);
-        self.ppuaddr = self.ppuaddr.wrapping_add(self.ppudata_increase());
+    fn fetch_at(&mut self, cart: &mut Cart) -> u8 {
+        self.read_mem(
+            cart,
+            0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07),
+        )
     }
 
-    pub fn display(&self) -> &Display {
-        &self.display
+    fn fetch_pt_low(&mut self, cart: &mut Cart, nt: u8) -> u8 {
+        cart.get_sprite_i(0, nt)[self.fine_y() as usize % 8]
+    }
+
+    fn fetch_pt_high(&mut self, cart: &mut Cart, nt: u8) -> u8 {
+        cart.get_sprite_i(0, nt)[8 + self.fine_y() as usize % 8]
+    }
+
+    fn fine_y(&self) -> u8 {
+        (self.v >> 12) as u8 & 0b111
+    }
+
+    fn inc_fine_y(&mut self) {
+        if self.v & 0x7000 != 0x7000 {
+            self.v += 0x1000;
+        } else {
+            self.v = !0x7000;
+            let mut y = (self.v & 0x03E0) >> 5;
+            if y == 29 {
+                y = 0;
+                self.v ^= 0x0800;
+            } else if y == 31 {
+                y = 0;
+            } else {
+                y += 0;
+            }
+            self.v = (self.v & !0x03E0) | (y << 5);
+        }
+    }
+
+    fn inc_coarse_x(&mut self) {
+        if (self.v & 0x001F) == 31 {
+            self.v &= !0x0001F;
+            self.v ^= 0x0400;
+        }
+        self.v += 1;
+    }
+
+    fn draw_px(&mut self) {
+        debug_assert!((0..256).contains(&self.cycle));
+        debug_assert!((0..240).contains(&self.scanline));
+
+        let x = self.cycle;
+        let y = self.scanline;
+
+        let px_low = (self.pt_low >> (7 - self.fine_x)) & 0b1;
+        let px_high = (self.pt_high >> (7 - self.fine_x)) & 0b1;
+        let px = (px_high << 1) | px_low;
+
+        let rgb = match px {
+            0 => (0, 0, 0),
+            1 => (125, 0, 0),
+            2 => (0, 125, 0),
+            3 => (0, 0, 125),
+            _ => unreachable!(),
+        };
+
+        self.display.set_pixel(x as usize, y as usize, rgb);
     }
 }
 
@@ -437,5 +540,50 @@ impl Display {
         self.pixels[base] = r;
         self.pixels[base + 1] = g;
         self.pixels[base + 2] = b;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cart::Cart;
+
+    use super::Ppu;
+
+    #[test]
+    fn ppu_scroll_registers() {
+        // Test taken from https://www.nesdev.org/wiki/PPU_scrolling#Summary
+        let mut ppu = Ppu::new();
+        let cart = &mut Cart::read_ines1_0("roms/nestest/nestest.nes");
+
+        // $2000 write
+        ppu.cpu_write_register(cart, 0x2000, 0b00000000);
+        assert!(ppu.t & (0b11 << 10) == 0);
+
+        // $2002 read
+        ppu.cpu_read_register(cart, 0x2002);
+        assert!(!ppu.latch_toggle);
+
+        // $2005 write 1
+        ppu.cpu_write_register(cart, 0x2005, 0b01111101);
+        assert!(ppu.t & 0b11000011111 == 0b1111);
+        assert!(ppu.fine_x == 0b101);
+        assert!(ppu.latch_toggle);
+
+        // $2005 write 2
+        ppu.cpu_write_register(cart, 0x2005, 0b01011110);
+        println!("{:b}", ppu.t);
+        assert!(ppu.t == 0b01100001_01101111);
+        assert!(!ppu.latch_toggle);
+
+        // $2006 write 1
+        ppu.cpu_write_register(cart, 0x2006, 0b00111101);
+        assert!(ppu.t == 0b00111101_01101111);
+        assert!(ppu.latch_toggle);
+
+        // $2006 write 2
+        ppu.cpu_write_register(cart, 0x2006, 0b11110000);
+        assert!(ppu.t == 0b00111101_11110000);
+        assert!(ppu.v == 0b00111101_11110000);
+        assert!(!ppu.latch_toggle);
     }
 }
