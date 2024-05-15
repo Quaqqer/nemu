@@ -9,6 +9,7 @@ use egui::Id;
 use nemu::{
     cpu::{Cpu, CpuBus},
     emulator::Emulator,
+    ppu::PpuCtrl,
 };
 
 fn main() {
@@ -30,43 +31,41 @@ struct NemuApp {
     emulator: Option<nemu::emulator::Emulator>,
     paused: bool,
     tex: TextureHandle,
+    nt1: TextureHandle,
+    nt2: TextureHandle,
+    nt3: TextureHandle,
+    nt4: TextureHandle,
     pt1: TextureHandle,
     pt2: TextureHandle,
 
     // UI State
     cpu_debug_open: bool,
     pattern_tables_open: bool,
+    nametable_open: bool,
 }
 
 impl NemuApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         cc.egui_ctx.set_fonts(Self::create_fonts());
 
-        let tex = cc.egui_ctx.load_texture(
-            "tex",
-            ColorImage::new([256, 240], Color32::BLACK),
-            TextureOptions {
-                magnification: egui::TextureFilter::Nearest,
-                ..Default::default()
-            },
-        );
+        let empty_tex = |name: &str, x: usize, y: usize| {
+            cc.egui_ctx.load_texture(
+                name,
+                ColorImage::new([x, y], Color32::BLACK),
+                TextureOptions {
+                    magnification: egui::TextureFilter::Nearest,
+                    ..Default::default()
+                },
+            )
+        };
 
-        let pt1 = cc.egui_ctx.load_texture(
-            "pt1",
-            ColorImage::new([256, 240], Color32::BLACK),
-            TextureOptions {
-                magnification: egui::TextureFilter::Nearest,
-                ..Default::default()
-            },
-        );
-        let pt2 = cc.egui_ctx.load_texture(
-            "pt2",
-            ColorImage::new([256, 240], Color32::BLACK),
-            TextureOptions {
-                magnification: egui::TextureFilter::Nearest,
-                ..Default::default()
-            },
-        );
+        let tex = empty_tex("tex", 256, 240);
+        let pt1 = empty_tex("pt1", 256, 256);
+        let pt2 = empty_tex("pt1", 256, 256);
+        let nt1 = empty_tex("nt1", 32 * 8, 30 * 8);
+        let nt2 = empty_tex("nt1", 32 * 8, 30 * 8);
+        let nt3 = empty_tex("nt1", 32 * 8, 30 * 8);
+        let nt4 = empty_tex("nt1", 32 * 8, 30 * 8);
 
         Self {
             emulator: None,
@@ -74,9 +73,14 @@ impl NemuApp {
             tex,
             pt1,
             pt2,
+            nt1,
+            nt2,
+            nt3,
+            nt4,
 
             cpu_debug_open: false,
             pattern_tables_open: false,
+            nametable_open: false,
         }
     }
 
@@ -169,6 +173,9 @@ impl eframe::App for NemuApp {
                         if ui.button("Pattern tables").clicked() {
                             self.pattern_tables_open = true;
                         };
+                        if ui.button("Nametables").clicked() {
+                            self.nametable_open = true;
+                        };
                     });
                 });
             },
@@ -188,6 +195,10 @@ impl eframe::App for NemuApp {
 
         self.cpu_debug_window(ctx);
         self.pattern_tables_window(ctx);
+        self.nametable_window(ctx);
+
+        // Always repaint
+        ctx.request_repaint();
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
@@ -397,8 +408,84 @@ impl NemuApp {
                     ui.add(pt2_image);
                 });
             });
+    }
 
-        // Always repaint
-        ctx.request_repaint();
+    fn nametable_window(&mut self, ctx: &Context) {
+        egui::Window::new("Name tables")
+            .open(&mut self.nametable_open)
+            .show(ctx, |ui| {
+                let Some(emu) = self.emulator.as_ref() else {
+                    ui.label("No emulator is active");
+                    return;
+                };
+
+                // Assumes that pattern tables are stored in vram
+                let Emulator { ppu, cart, .. } = emu;
+
+                let set_nt = |tex: &mut TextureHandle, nt: u8| {
+                    let mut buf: [u8; 30 * 32 * 8 * 8 * 3] = [0; 184320];
+                    for row in 0..30 {
+                        for col in 0..32 {
+                            let nt_entry =
+                                cart.inspect_nametable(ppu, nt, row as u16 * 32 + col as u16);
+                            let sprite = cart.get_sprite_i(
+                                ppu.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
+                                nt_entry,
+                            );
+                            for dy in 0..8 {
+                                let low = sprite[dy];
+                                let high = sprite[dy + 8];
+                                for dx in 0..8 {
+                                    let base = ((row * 8 + dy) * (32 * 8) + (col * 8) + dx) * 3;
+                                    let low_bit = (low >> (7 - dx)) & 1;
+                                    let high_bit = (high >> (7 - dx)) & 1;
+                                    let px = (high_bit << 1) | low_bit;
+                                    let (r, g, b) = match px {
+                                        0 => (0, 0, 0),
+                                        1 => (125, 0, 0),
+                                        2 => (0, 125, 0),
+                                        3 => (0, 0, 125),
+                                        _ => unreachable!(),
+                                    };
+                                    buf[base] = r;
+                                    buf[base + 1] = g;
+                                    buf[base + 2] = b;
+                                }
+                            }
+                        }
+                    }
+                    let cimg = ColorImage::from_rgb([32 * 8, 30 * 8], &buf);
+                    tex.set(
+                        cimg,
+                        TextureOptions {
+                            magnification: egui::TextureFilter::Nearest,
+                            ..Default::default()
+                        },
+                    );
+                };
+                set_nt(&mut self.nt1, 0);
+                set_nt(&mut self.nt2, 1);
+                set_nt(&mut self.nt3, 2);
+                set_nt(&mut self.nt4, 3);
+
+                egui::Grid::new("nametable_grid").show(ui, |ui| {
+                    macro_rules! add_img {
+                        ($tex:expr) => {
+                            ui.add(
+                                egui::Image::from_texture(SizedTexture::from($tex))
+                                    .fit_to_exact_size(Vec2::new(32. * 8., 30. * 8.)),
+                            );
+                        };
+                    }
+
+                    add_img!(&self.nt1);
+                    add_img!(&self.nt2);
+                    ui.end_row();
+
+                    add_img!(&self.nt3);
+                    add_img!(&self.nt4);
+                    ui.end_row();
+                });
+            });
     }
 }

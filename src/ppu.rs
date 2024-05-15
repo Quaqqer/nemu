@@ -57,7 +57,7 @@ bitflags! {
 
 pub struct Ppu {
     // Registers
-    ppuctrl: PpuCtrl,
+    pub ppuctrl: PpuCtrl,
     ppumask: PpuMask,
     ppustatus: PpuStatus,
     oamaddr: u8,
@@ -164,7 +164,7 @@ impl Ppu {
                 5 => 0,
                 // Addr
                 6 => 0,
-                // Write data
+                // Data
                 7 => {
                     // TODO: Some stuff should be done different here apparently
                     let v = self.read_mem(cart, self.v);
@@ -190,7 +190,7 @@ impl Ppu {
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
-            match (addr - 0x2000) % 0x8 {
+            match (addr - 0x2000) % 8 {
                 // Control
                 0 => {
                     self.ppuctrl = PpuCtrl::from_bits(v).unwrap();
@@ -229,7 +229,7 @@ impl Ppu {
                     self.latch_toggle = !self.latch_toggle;
                 }
                 // Addr
-                0x6 => {
+                6 => {
                     if !self.latch_toggle {
                         self.t &= !(0b1111111 << 8);
                         self.t |= (v as u16 & 0b111111) << 8;
@@ -240,23 +240,14 @@ impl Ppu {
                     }
                     self.latch_toggle = !self.latch_toggle;
                 }
-                // Write data
-                0x7 => {
+                // Data
+                7 => {
+                    println!("Write data ${:#02x} to addr ${:#04x}", v, self.v);
                     self.write_mem(cart, self.v, v);
                     self.v = self.v.wrapping_add(self.ppudata_increase());
                 }
                 _ => unreachable!(),
             }
-        }
-    }
-
-    fn nametable_address(&self) -> u16 {
-        match self.ppuctrl.bits() & 0b11 {
-            0 => 0x2000,
-            1 => 0x2400,
-            2 => 0x2800,
-            3 => 0x2C00,
-            _ => unreachable!(),
         }
     }
 
@@ -289,8 +280,18 @@ impl Ppu {
                 // Visible scanlines
                 match self.cycle {
                     0 => {
+                        // Reset coarse x
+                        self.v &= !(0b0100_00011111);
+                        self.v |= self.t & (0b0100_00011111);
+                        self.fine_x = 0;
+
                         self.set_nexts();
                         self.draw_px();
+
+                        println!(
+                            "{},{} - v: ${:#04x}, t: ${:#04x}, fine_x: {}, nt_addr: ${:#04x}, nt: {}, at: ${:#02x}, pt_low: ${:#02x}, pt_high: ${:#02x}",
+                            self.cycle, self.scanline, self.v, self.t, self.fine_x, 0x2000 | (self.v & 0x0FFF), self.nt, self.at, self.pt_low, self.pt_high
+                        );
                     }
                     1..256 => {
                         // Fetches
@@ -310,7 +311,6 @@ impl Ppu {
                     }
                     256 => {
                         self.set_nexts();
-                        self.inc_coarse_x();
                         self.inc_fine_y();
                     }
                     // TODO: Some special behaviour for these cycles
@@ -342,7 +342,7 @@ impl Ppu {
             // Post-render scanline, idle
             240 => {}
             // Vertical blanking lines
-            241..261 => {
+            241 => {
                 if self.cycle == 1 {
                     self.ppustatus |= PpuStatus::VBLANK;
                     // Remove sprite 0 hit on vblank?
@@ -350,11 +350,15 @@ impl Ppu {
                     self.nmi = true;
                 }
             }
+            242..261 => {}
             // Pre-render scanline
             261 => {
                 if self.cycle == 1 {
                     self.ppustatus -= PpuStatus::VBLANK;
                 }
+
+                self.v &= !(0b111101111100000);
+                self.v |= self.t & (0b111101111100000);
 
                 // TODO dummy reads
             }
@@ -429,27 +433,29 @@ impl Ppu {
     }
 
     fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
-        let addr = 0x2000 | (self.v & 0x0FFF);
-        let v = self.read_mem(cart, addr);
-        if v != 0 {
-            println!("Nt: {}", self.nt)
-        }
-        v
+        let nt_addr = 0x2000 | (self.v & 0x0FFF);
+        self.read_mem(cart, nt_addr)
     }
 
     fn fetch_at(&mut self, cart: &mut Cart) -> u8 {
-        self.read_mem(
-            cart,
-            0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07),
-        )
+        let attr_addr =
+            0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
+
+        self.read_mem(cart, attr_addr)
     }
 
     fn fetch_pt_low(&mut self, cart: &mut Cart, nt: u8) -> u8 {
-        cart.get_sprite_i(0, nt)[self.fine_y() as usize % 8]
+        cart.get_sprite_i(
+            self.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
+            nt,
+        )[self.fine_y() as usize]
     }
 
     fn fetch_pt_high(&mut self, cart: &mut Cart, nt: u8) -> u8 {
-        cart.get_sprite_i(0, nt)[8 + self.fine_y() as usize % 8]
+        cart.get_sprite_i(
+            self.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
+            nt,
+        )[8 + self.fine_y() as usize]
     }
 
     fn fine_y(&self) -> u8 {
@@ -457,10 +463,10 @@ impl Ppu {
     }
 
     fn inc_fine_y(&mut self) {
-        if self.v & 0x7000 != 0x7000 {
+        if (self.v & 0x7000) != 0x7000 {
             self.v += 0x1000;
         } else {
-            self.v = !0x7000;
+            self.v &= !0x7000;
             let mut y = (self.v & 0x03E0) >> 5;
             if y == 29 {
                 y = 0;
@@ -468,7 +474,7 @@ impl Ppu {
             } else if y == 31 {
                 y = 0;
             } else {
-                y += 0;
+                y += 1;
             }
             self.v = (self.v & !0x03E0) | (y << 5);
         }
@@ -478,8 +484,9 @@ impl Ppu {
         if (self.v & 0x001F) == 31 {
             self.v &= !0x0001F;
             self.v ^= 0x0400;
+        } else {
+            self.v += 1;
         }
-        self.v += 1;
     }
 
     fn draw_px(&mut self) {
@@ -571,7 +578,6 @@ mod tests {
 
         // $2005 write 2
         ppu.cpu_write_register(cart, 0x2005, 0b01011110);
-        println!("{:b}", ppu.t);
         assert!(ppu.t == 0b01100001_01101111);
         assert!(!ppu.latch_toggle);
 
@@ -587,3 +593,7 @@ mod tests {
         assert!(!ppu.latch_toggle);
     }
 }
+
+// 255,231 - v: $0x739f, t: $0x00, fine_x: 7, nt_addr: $0x239f, nt: 0, at: $0x0, pt_low: $0x0, pt_high: $0x0
+// 255,238 - v: $0x63bf, t: $0x00, fine_x: 7, nt_addr: $0x23bf, nt: 0, at: $0x0, pt_low: $0x0, pt_high: $0x0
+// 255,239 - v: $0x73bf, t: $0x00, fine_x: 7, nt_addr: $0x23bf, nt: 0, at: $0x0, pt_low: $0x0, pt_high: $0x0

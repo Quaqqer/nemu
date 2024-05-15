@@ -38,7 +38,6 @@ impl Emulator {
         if ppu.nmi {
             cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
         }
-
         ppu.nmi = false;
 
         let cpu_cycles = cpu.tick(&mut CpuBus { apu, ppu, cart });

@@ -166,7 +166,7 @@ impl Cart {
 
     pub fn write_pattern_table(&mut self, ppu: &mut Ppu, pattern_table: u8, addr: u16, v: u8) {
         // TODO: Shouldn't always be readable?
-        debug_assert!(addr < 0x400);
+        debug_assert!(addr < 0x1000);
         debug_assert!(pattern_table <= 1);
 
         self.chr[0x1000 * pattern_table as usize + addr as usize] = v
@@ -204,6 +204,28 @@ impl Cart {
         }
     }
 
+    pub fn inspect_nametable(&self, ppu: &Ppu, nametable: u8, addr: u16) -> u8 {
+        debug_assert!(addr < 0x400);
+        debug_assert!(nametable <= 3);
+
+        match self.mirroring {
+            Mirroring::Horizontal => match nametable {
+                0 => ppu.vram[addr as usize],
+                1 => ppu.vram[0x400 + addr as usize],
+                2 => ppu.vram[addr as usize],
+                3 => ppu.vram[0x400 + addr as usize],
+                _ => unreachable!(),
+            },
+            Mirroring::Vertical => match nametable {
+                0 => ppu.vram[addr as usize],
+                1 => ppu.vram[addr as usize],
+                2 => ppu.vram[0x400 + addr as usize],
+                3 => ppu.vram[0x400 + addr as usize],
+                _ => unreachable!(),
+            },
+        }
+    }
+
     pub fn write_nametable(&mut self, ppu: &mut Ppu, nametable: u8, addr: u16, v: u8) {
         debug_assert!(addr < 0x400);
         debug_assert!(nametable <= 3);
@@ -211,15 +233,15 @@ impl Cart {
         match self.mirroring {
             Mirroring::Horizontal => match nametable {
                 0 => ppu.vram[addr as usize] = v,
-                1 => ppu.vram[addr as usize] = v,
-                2 => ppu.vram[0x400 + addr as usize] = v,
+                2 => ppu.vram[addr as usize] = v,
+                1 => ppu.vram[0x400 + addr as usize] = v,
                 3 => ppu.vram[0x400 + addr as usize] = v,
                 _ => unreachable!(),
             },
             Mirroring::Vertical => match nametable {
                 0 => ppu.vram[addr as usize] = v,
-                1 => ppu.vram[0x400 + addr as usize] = v,
-                2 => ppu.vram[addr as usize] = v,
+                2 => ppu.vram[0x400 + addr as usize] = v,
+                1 => ppu.vram[addr as usize] = v,
                 3 => ppu.vram[0x400 + addr as usize] = v,
                 _ => unreachable!(),
             },
