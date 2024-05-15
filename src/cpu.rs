@@ -487,7 +487,7 @@ impl Cpu {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::ZERO));
     }
 
-    fn bpl(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bpl(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::NEGATIVE));
     }
 
@@ -834,8 +834,7 @@ impl Cpu {
 
     pub fn nmi_interrupt(&mut self, bus: &mut CpuBus) {
         self.push16(bus, self.pc);
-        let flags = self.p | P::B;
-        self.push8(bus, flags.bits());
+        self.push8(bus, self.p.bits());
         self.p |= P::INTERRUPT_DISABLE;
         self.pc = self.read_mem16(bus, 0xfffa);
     }

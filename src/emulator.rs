@@ -2,7 +2,7 @@ use crate::{
     apu::Apu,
     cart::Cart,
     cpu::{Cpu, CpuBus},
-    ppu::{self, Display, Ppu},
+    ppu::{Display, Ppu},
 };
 
 pub struct Emulator {

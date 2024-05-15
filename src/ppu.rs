@@ -58,19 +58,19 @@ bitflags! {
 pub struct Ppu {
     // Registers
     pub ppuctrl: PpuCtrl,
-    ppumask: PpuMask,
-    ppustatus: PpuStatus,
+    pub ppumask: PpuMask,
+    pub ppustatus: PpuStatus,
     oamaddr: u8,
     latch_toggle: bool,
-    t: u16,
-    v: u16,
+    pub t: u16,
+    pub v: u16,
     oamdma: u8,
 
     // Current PPU position
-    scanline: u16,
-    cycle: u16,
+    pub scanline: u16,
+    pub cycle: u16,
 
-    fine_x: u8,
+    pub fine_x: u8,
 
     pub vram: [u8; 0x800],
     palette: [u8; 0x20],
@@ -190,6 +190,7 @@ impl Ppu {
         if addr == 0x4014 {
             self.oamdma = v;
         } else {
+            println!("ppu addr: ${:#04x}", addr);
             match (addr - 0x2000) % 8 {
                 // Control
                 0 => {
@@ -288,10 +289,10 @@ impl Ppu {
                         self.set_nexts();
                         self.draw_px();
 
-                        println!(
-                            "{},{} - v: ${:#04x}, t: ${:#04x}, fine_x: {}, nt_addr: ${:#04x}, nt: {}, at: ${:#02x}, pt_low: ${:#02x}, pt_high: ${:#02x}",
-                            self.cycle, self.scanline, self.v, self.t, self.fine_x, 0x2000 | (self.v & 0x0FFF), self.nt, self.at, self.pt_low, self.pt_high
-                        );
+                        // println!(
+                        //     "{},{} - v: ${:#04x}, t: ${:#04x}, fine_x: {}, nt_addr: ${:#04x}, nt: {}, at: ${:#02x}, pt_low: ${:#02x}, pt_high: ${:#02x}",
+                        //     self.cycle, self.scanline, self.v, self.t, self.fine_x, 0x2000 | (self.v & 0x0FFF), self.nt, self.at, self.pt_low, self.pt_high
+                        // );
                     }
                     1..256 => {
                         // Fetches

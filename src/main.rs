@@ -40,6 +40,7 @@ struct NemuApp {
 
     // UI State
     cpu_debug_open: bool,
+    ppu_debug_open: bool,
     pattern_tables_open: bool,
     nametable_open: bool,
 }
@@ -79,6 +80,7 @@ impl NemuApp {
             nt4,
 
             cpu_debug_open: false,
+            ppu_debug_open: false,
             pattern_tables_open: false,
             nametable_open: false,
         }
@@ -170,6 +172,9 @@ impl eframe::App for NemuApp {
                         if ui.button("CPU").clicked() {
                             self.cpu_debug_open = true;
                         };
+                        if ui.button("PPU").clicked() {
+                            self.ppu_debug_open = true;
+                        };
                         if ui.button("Pattern tables").clicked() {
                             self.pattern_tables_open = true;
                         };
@@ -194,6 +199,7 @@ impl eframe::App for NemuApp {
         });
 
         self.cpu_debug_window(ctx);
+        self.ppu_debug_window(ctx);
         self.pattern_tables_window(ctx);
         self.nametable_window(ctx);
 
@@ -338,6 +344,41 @@ impl NemuApp {
                             ui.label("$???? ?");
                         }
                     }
+                });
+            });
+    }
+
+    fn ppu_debug_window(&mut self, ctx: &Context) {
+        egui::Window::new("PPU Debug")
+            .open(&mut self.ppu_debug_open)
+            .show(ctx, |ui| {
+                let Some(emu) = self.emulator.as_mut() else {
+                    ui.label("No emulator is active");
+                    return;
+                };
+
+                let Emulator { ppu, .. } = emu;
+
+                egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
+                    ui.label("CTRL");
+                    ui.label(format!("{:#08b}", ppu.ppuctrl.bits()));
+                    ui.end_row();
+
+                    ui.label("MASK");
+                    ui.label(format!("{:#08b}", ppu.ppumask.bits()));
+                    ui.end_row();
+
+                    ui.label("STATUS");
+                    ui.label(format!("{:#08b}", ppu.ppustatus.bits()));
+                    ui.end_row();
+
+                    ui.label("T");
+                    ui.label(format!("{:#04x}", ppu.t));
+                    ui.end_row();
+
+                    ui.label("V");
+                    ui.label(format!("{:#04x}", ppu.v));
+                    ui.end_row();
                 });
             });
     }
