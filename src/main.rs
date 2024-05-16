@@ -216,6 +216,11 @@ impl eframe::App for NemuApp {
                     egui::Key::P => {
                         self.paused ^= true;
                     }
+                    egui::Key::S => {
+                        if let Some(emu) = self.emulator.as_mut() {
+                            emu.step_scanline();
+                        }
+                    }
                     egui::Key::N => {
                         if let Some(emu) = self.emulator.as_mut() {
                             emu.step();
@@ -378,6 +383,14 @@ impl NemuApp {
 
                     ui.label("V");
                     ui.label(format!("{:#04x}", ppu.v));
+                    ui.end_row();
+
+                    ui.label("Scanline");
+                    ui.label(format!("{}", ppu.scanline));
+                    ui.end_row();
+
+                    ui.label("Cycle");
+                    ui.label(format!("{}", ppu.cycle));
                     ui.end_row();
                 });
             });

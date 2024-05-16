@@ -78,7 +78,6 @@ pub struct Ppu {
     odd: bool,
 
     pub nmi: bool,
-    pub frame_end: bool,
 
     display: Display,
 
@@ -116,7 +115,6 @@ impl Ppu {
             fine_x: 0,
 
             nmi: false,
-            frame_end: false,
 
             display: Display::new(),
 
@@ -226,7 +224,7 @@ impl Ppu {
                         self.t &= !(0b111 << 12);
                         self.t |= (v as u16 & 0b111) << 12;
                     }
-                    self.latch_toggle = !self.latch_toggle;
+                    self.latch_toggle ^= true;
                 }
                 // Addr
                 6 => {
@@ -238,7 +236,7 @@ impl Ppu {
                         self.t |= v as u16;
                         self.v = self.t;
                     }
-                    self.latch_toggle = !self.latch_toggle;
+                    self.latch_toggle ^= true;
                 }
                 // Data
                 7 => {
@@ -331,7 +329,6 @@ impl Ppu {
                     // Start vblank
                     // Remove sprite 0 hit on vblank?
                     self.ppustatus |= PpuStatus::VBLANK;
-                    self.frame_end = true;
                     self.nmi = true;
                 }
             }
@@ -379,6 +376,7 @@ impl Ppu {
             self.scanline += 1;
             if self.scanline > 261 {
                 self.scanline = 0;
+                self.odd = !self.odd;
             }
         }
     }
@@ -610,7 +608,3 @@ mod tests {
         assert!(!ppu.latch_toggle);
     }
 }
-
-// 255,231 - v: $0x739f, t: $0x00, fine_x: 7, nt_addr: $0x239f, nt: 0, at: $0x0, pt_low: $0x0, pt_high: $0x0
-// 255,238 - v: $0x63bf, t: $0x00, fine_x: 7, nt_addr: $0x23bf, nt: 0, at: $0x0, pt_low: $0x0, pt_high: $0x0
-// 255,239 - v: $0x73bf, t: $0x00, fine_x: 7, nt_addr: $0x23bf, nt: 0, at: $0x0, pt_low: $0x0, pt_high: $0x0

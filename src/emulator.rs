@@ -14,10 +14,15 @@ pub struct Emulator {
 
 impl Emulator {
     pub fn step_frame(&mut self) {
-        while !self.ppu.frame_end {
+        while !self.step() {}
+    }
+
+    pub fn step_scanline(&mut self) {
+        let start = self.ppu.scanline;
+
+        while self.ppu.scanline == start {
             self.step();
         }
-        self.ppu.frame_end = false;
     }
 
     pub fn reset(&mut self) {
@@ -27,7 +32,7 @@ impl Emulator {
         self.cart.reset();
     }
 
-    pub fn step(&mut self) {
+    pub fn step(&mut self) -> bool {
         let Emulator {
             cpu,
             apu,
@@ -35,6 +40,7 @@ impl Emulator {
             cart,
         } = self;
 
+        let did_nmi = ppu.nmi;
         if ppu.nmi {
             cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
         }
@@ -45,6 +51,7 @@ impl Emulator {
         for _ in 0..cpu_cycles * 3 {
             ppu.cycle(cart);
         }
+        did_nmi
     }
 
     pub fn display(&self) -> &Display {
