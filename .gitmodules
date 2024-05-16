@@ -1,0 +1,3 @@
+[submodule "res/SingleStepTests"]
+	path = res/SingleStepTests
+	url = https://github.com/SingleStepTests/65x02
