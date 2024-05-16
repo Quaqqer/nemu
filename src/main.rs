@@ -268,7 +268,7 @@ impl NemuApp {
                     ui.end_row();
 
                     ui.label("P");
-                    ui.label(format!("{:#02x}", cpu.p));
+                    ui.label(format!("{}", cpu.p));
                     ui.end_row();
 
                     ui.label("A");
@@ -366,15 +366,15 @@ impl NemuApp {
 
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
                     ui.label("CTRL");
-                    ui.label(format!("{:#08b}", ppu.ppuctrl.bits()));
+                    ui.label(format!("{}", ppu.ppuctrl));
                     ui.end_row();
 
                     ui.label("MASK");
-                    ui.label(format!("{:#08b}", ppu.ppumask.bits()));
+                    ui.label(format!("{}", ppu.ppumask));
                     ui.end_row();
 
                     ui.label("STATUS");
-                    ui.label(format!("{:#08b}", ppu.ppustatus.bits()));
+                    ui.label(format!("{}", ppu.ppustatus));
                     ui.end_row();
 
                     ui.label("T");

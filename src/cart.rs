@@ -227,7 +227,6 @@ impl Cart {
     }
 
     pub fn write_nametable(&mut self, ppu: &mut Ppu, nametable: u8, addr: u16, v: u8) {
-        println!("Wrote nametable!");
         debug_assert!(addr < 0x400);
         debug_assert!(nametable <= 3);
 

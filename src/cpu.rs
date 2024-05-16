@@ -21,6 +21,12 @@ bitflags! {
     }
 }
 
+impl std::fmt::Display for P {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::util::fmt_bitflags_u8(self.bits(), ['n', 'o', '5', 'b', 'd', 'i', 'z', 'c'], f)
+    }
+}
+
 pub struct Cpu {
     pub a: u8,
     pub x: u8,
@@ -82,7 +88,7 @@ impl Cpu {
         }
     }
 
-    pub fn inspect_mem8(&self, bus: &mut CpuBus, addr: u16) -> Option<u8> {
+    pub fn inspect_mem8(&self, bus: &CpuBus, addr: u16) -> Option<u8> {
         match addr {
             0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
             0x2000..=0x3FFF => None,
@@ -100,7 +106,7 @@ impl Cpu {
         u16::from_le_bytes([l, r])
     }
 
-    pub fn inspect_mem16(&self, bus: &mut CpuBus, addr: u16) -> Option<u16> {
+    pub fn inspect_mem16(&self, bus: &CpuBus, addr: u16) -> Option<u16> {
         let l = self.inspect_mem8(bus, addr);
         let r = self.inspect_mem8(bus, addr.wrapping_add(1));
         if let Some(l) = l
@@ -881,5 +887,56 @@ impl Cpu {
 
     fn ahx(&self, bus: &mut CpuBus) {
         // Illegal opcode not implemented
+    }
+
+    pub fn print_op(&self, bus: &CpuBus, addr: u16) -> String {
+        let Some(opcode) = self.inspect_mem8(bus, addr) else {
+            return "?".to_string();
+        };
+        macro_rules! read_8(($base:expr, $offset:expr) => {
+            self.inspect_mem8(bus, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
+        });
+
+        macro_rules! read_16(($base:expr, $offset:expr) => {
+            self.inspect_mem16(bus, $base.wrapping_add($offset)).map(|v| format!("${:04x}", v)).unwrap_or("$????".to_string())
+        });
+
+        let (op, addr_mode, _, _) = OPCODE_MATRIX[opcode as usize];
+        let addr_format = match addr_mode {
+            AddrMode::Acc => "A {{ACC}}".to_string(),
+            AddrMode::Imm => {
+                format!("#{} {{IMM}}", read_8!(addr, 1))
+            }
+            AddrMode::Zp0 => format!("{} {{ZP}}", read_8!(addr, 1)),
+            AddrMode::ZpX => {
+                format!("{},x {{ZPX}}", read_8!(addr, 1))
+            }
+            AddrMode::ZpY => {
+                format!("{},y {{ZPY}}", read_8!(addr, 1))
+            }
+            AddrMode::Abs => {
+                format!("{} {{ABS}}", read_16!(addr, 1))
+            }
+            AddrMode::AbX => {
+                format!("{},x {{ABX}}", read_16!(addr, 1))
+            }
+            AddrMode::AbY => {
+                format!("{},y {{ABY}}", read_16!(addr, 1))
+            }
+            AddrMode::Rel => {
+                format!("{} {{REL}}", read_8!(addr, 1))
+            }
+            AddrMode::Ind => {
+                format!("{} {{IND}}", read_16!(addr, 1))
+            }
+            AddrMode::IdX => {
+                format!("{},x {{IDX}}", read_16!(addr, 1))
+            }
+            AddrMode::IdY => {
+                format!("{},y {{IDY}}", read_16!(addr, 1))
+            }
+        };
+
+        format!("${:#04x}: {} {}", addr, op, addr_format)
     }
 }

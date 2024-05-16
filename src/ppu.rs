@@ -20,6 +20,12 @@ bitflags! {
     }
 }
 
+impl std::fmt::Display for PpuCtrl {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::util::fmt_bitflags_u8(self.bits(), ['n', 'm', 's', 'b', 'a', 'i', 'y', 'x'], f)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct PpuMask(u8);
 
@@ -39,6 +45,12 @@ bitflags! {
     }
 }
 
+impl std::fmt::Display for PpuMask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::util::fmt_bitflags_u8(self.bits(), ['b', 'g', 'r', 's', 'b', 's', 'b', 'm'], f)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct PpuStatus(u8);
 bitflags! {
@@ -52,6 +64,12 @@ bitflags! {
         const SPRITE_0_HIT    = 0b01000000;
         /// Vertical blank started
         const VBLANK          = 0b10000000;
+    }
+}
+
+impl std::fmt::Display for PpuStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        crate::util::fmt_bitflags_u8(self.bits(), ['v', 's', 'o', 'x', 'x', 'x', 'x', 'x'], f)
     }
 }
 

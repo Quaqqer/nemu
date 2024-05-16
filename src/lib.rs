@@ -9,3 +9,4 @@ pub mod nes;
 pub mod op;
 pub mod ppu;
 mod test;
+mod util;
