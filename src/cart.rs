@@ -157,14 +157,14 @@ impl Cart {
         (r << 1) | l
     }
 
-    pub fn read_pattern_table(&mut self, ppu: &mut Ppu, pattern_table: u8, addr: u16) -> u8 {
+    pub fn read_pattern_table(&mut self, _ppu: &mut Ppu, pattern_table: u8, addr: u16) -> u8 {
         debug_assert!(addr < 0x1000);
         debug_assert!(pattern_table <= 1);
 
         self.chr[0x1000 * pattern_table as usize + addr as usize]
     }
 
-    pub fn write_pattern_table(&mut self, ppu: &mut Ppu, pattern_table: u8, addr: u16, v: u8) {
+    pub fn write_pattern_table(&mut self, _ppu: &mut Ppu, pattern_table: u8, addr: u16, v: u8) {
         // TODO: Shouldn't always be readable?
         debug_assert!(addr < 0x1000);
         debug_assert!(pattern_table <= 1);

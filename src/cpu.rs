@@ -70,7 +70,6 @@ enum Addr {
     /// Memory with page crossed
     MemPC(u16),
     Rel(i8),
-    None,
 }
 
 impl Cpu {
@@ -259,7 +258,7 @@ impl Cpu {
                 self.cyc += 1;
                 self.read_mem8(bus, a)
             }
-            Addr::Rel(_) | Addr::None => unreachable!(),
+            Addr::Rel(_) => unreachable!(),
         }
     }
 
@@ -269,7 +268,7 @@ impl Cpu {
                 self.a = v;
             }
             Addr::Mem(a) | Addr::MemPC(a) => self.write_mem8(bus, a, v),
-            Addr::None | Addr::Rel(_) => unreachable!(),
+            Addr::Rel(_) => unreachable!(),
         }
     }
 
@@ -465,15 +464,15 @@ impl Cpu {
         self.write8(bus, a, new_v);
     }
 
-    fn bcc(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bcc(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::CARRY));
     }
 
-    fn bcs(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bcs(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::CARRY));
     }
 
-    fn beq(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn beq(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::ZERO));
     }
 
@@ -485,11 +484,11 @@ impl Cpu {
         self.p.set(P::ZERO, m & v == 0);
     }
 
-    fn bmi(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bmi(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::NEGATIVE));
     }
 
-    fn bne(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bne(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::ZERO));
     }
 
@@ -504,27 +503,27 @@ impl Cpu {
         self.pc = self.read_mem16(bus, 0xFFFE);
     }
 
-    fn bvc(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bvc(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::OVERFLOW));
     }
 
-    fn bvs(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn bvs(&mut self, _bus: &mut CpuBus, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::OVERFLOW));
     }
 
-    fn clc(&mut self, bus: &mut CpuBus) {
+    fn clc(&mut self, _bus: &mut CpuBus) {
         self.p -= P::CARRY;
     }
 
-    fn cld(&mut self, bus: &mut CpuBus) {
+    fn cld(&mut self, _bus: &mut CpuBus) {
         self.p -= P::DECIMAL;
     }
 
-    fn cli(&mut self, bus: &mut CpuBus) {
+    fn cli(&mut self, _bus: &mut CpuBus) {
         self.p -= P::INTERRUPT_DISABLE;
     }
 
-    fn clv(&mut self, bus: &mut CpuBus) {
+    fn clv(&mut self, _bus: &mut CpuBus) {
         self.p -= P::OVERFLOW;
     }
 
@@ -558,13 +557,13 @@ impl Cpu {
         self.update_negative(v);
     }
 
-    fn dex(&mut self, bus: &mut CpuBus) {
+    fn dex(&mut self, _bus: &mut CpuBus) {
         self.x = self.x.wrapping_sub(1);
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn dey(&mut self, bus: &mut CpuBus) {
+    fn dey(&mut self, _bus: &mut CpuBus) {
         self.y = self.y.wrapping_sub(1);
         self.update_zero(self.y);
         self.update_negative(self.y);
@@ -583,14 +582,14 @@ impl Cpu {
         self.update_negative(v);
     }
 
-    fn inx(&mut self, bus: &mut CpuBus) {
+    fn inx(&mut self, _bus: &mut CpuBus) {
         let v = self.x.wrapping_add(1);
         self.x = v;
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn iny(&mut self, bus: &mut CpuBus) {
+    fn iny(&mut self, _bus: &mut CpuBus) {
         let v = self.y.wrapping_add(1);
         self.y = v;
         self.update_zero(v);
@@ -602,7 +601,7 @@ impl Cpu {
         self.sbc(bus, a);
     }
 
-    fn jmp(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn jmp(&mut self, _bus: &mut CpuBus, a: Addr) {
         if let Addr::Mem(m) = a {
             self.pc = m;
         } else {
@@ -756,15 +755,15 @@ impl Cpu {
         self.a = res8;
     }
 
-    fn sec(&mut self, bus: &mut CpuBus) {
+    fn sec(&mut self, _bus: &mut CpuBus) {
         self.p |= P::CARRY;
     }
 
-    fn sed(&mut self, bus: &mut CpuBus) {
+    fn sed(&mut self, _bus: &mut CpuBus) {
         self.p |= P::DECIMAL;
     }
 
-    fn sei(&mut self, bus: &mut CpuBus) {
+    fn sei(&mut self, _bus: &mut CpuBus) {
         self.p |= P::INTERRUPT_DISABLE;
     }
 
@@ -790,35 +789,35 @@ impl Cpu {
         self.write8(bus, a, self.y);
     }
 
-    fn tax(&mut self, bus: &mut CpuBus) {
+    fn tax(&mut self, _bus: &mut CpuBus) {
         self.x = self.a;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn tay(&mut self, bus: &mut CpuBus) {
+    fn tay(&mut self, _bus: &mut CpuBus) {
         self.y = self.a;
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn tsx(&mut self, bus: &mut CpuBus) {
+    fn tsx(&mut self, _bus: &mut CpuBus) {
         self.x = self.sp;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn txa(&mut self, bus: &mut CpuBus) {
+    fn txa(&mut self, _bus: &mut CpuBus) {
         self.a = self.x;
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn txs(&mut self, bus: &mut CpuBus) {
+    fn txs(&mut self, _bus: &mut CpuBus) {
         self.sp = self.x;
     }
 
-    fn tya(&mut self, bus: &mut CpuBus) {
+    fn tya(&mut self, _bus: &mut CpuBus) {
         self.a = self.y;
         self.update_zero(self.a);
         self.update_negative(self.a);
@@ -845,47 +844,47 @@ impl Cpu {
         self.pc = self.read_mem16(bus, 0xfffa);
     }
 
-    fn tas(&self, bus: &mut CpuBus) {
+    fn tas(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn xaa(&self, bus: &mut CpuBus) {
+    fn xaa(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn shy(&self, bus: &mut CpuBus) {
+    fn shy(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn shx(&self, bus: &mut CpuBus) {
+    fn shx(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn las(&self, bus: &mut CpuBus) {
+    fn las(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn axs(&self, bus: &mut CpuBus) {
+    fn axs(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn kil(&self, bus: &mut CpuBus) {
+    fn kil(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn arr(&self, bus: &mut CpuBus) {
+    fn arr(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn anc(&self, bus: &mut CpuBus) {
+    fn anc(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn alr(&self, bus: &mut CpuBus) {
+    fn alr(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
-    fn ahx(&self, bus: &mut CpuBus) {
+    fn ahx(&self, _bus: &mut CpuBus) {
         // Illegal opcode not implemented
     }
 
