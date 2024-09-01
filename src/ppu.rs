@@ -283,11 +283,39 @@ impl Ppu {
     }
 
     pub fn cycle(&mut self, cart: &mut Cart) {
-        self.render_bg(cart);
+        if self.ppumask.intersects(PpuMask::SHOW_BACKGROUND) {
+            self.render_bg(cart);
+        }
+
+        match (self.scanline, self.cycle) {
+            (241, 1) => {
+                // Start vblank
+                // Remove sprite 0 hit on vblank?
+                self.ppustatus |= PpuStatus::VBLANK;
+
+                if self.ppuctrl.intersects(PpuCtrl::NMI) {
+                    self.nmi = true;
+                }
+            }
+            (261, 1) => {
+                self.ppustatus -=
+                    PpuStatus::VBLANK | PpuStatus::SPRITE_0_HIT | PpuStatus::SPRITE_OVERFLOW;
+            }
+            _ => {}
+        }
+
+        self.cycle += 1;
+        if self.cycle > 340 {
+            self.cycle = 0;
+            self.scanline += 1;
+            if self.scanline > 261 {
+                self.scanline = 0;
+                self.odd = !self.odd;
+            }
+        }
     }
 
     fn render_bg(&mut self, cart: &mut Cart) {
-        // Pre-render scanline
         let cycle = self.cycle;
         let scanline = self.scanline;
 
@@ -301,6 +329,7 @@ impl Ppu {
                 // Scroll
                 match cycle {
                     0 => {
+                        // FIXME
                         // Saw no documentation for this, but it seems reasonable and produces good
                         // results.
                         self.fine_x = 0;
@@ -348,28 +377,12 @@ impl Ppu {
             // Post-render scanline, idle
             240 => {}
             // Vertical blanking lines
-            241 => {
-                if self.cycle == 1 {
-                    // Start vblank
-                    // Remove sprite 0 hit on vblank?
-                    self.ppustatus |= PpuStatus::VBLANK;
-
-                    if self.ppuctrl.intersects(PpuCtrl::NMI) {
-                        self.nmi = true;
-                    }
-                }
-            }
-            242..261 => {}
+            241..261 => {}
             // Pre-render scanline
             261 => {
                 // Special stuff
                 match cycle {
                     // Clear vblank, sprite 0, sprite overflow
-                    1 => {
-                        self.ppustatus -= PpuStatus::VBLANK
-                            | PpuStatus::SPRITE_0_HIT
-                            | PpuStatus::SPRITE_OVERFLOW;
-                    }
                     280..=304 => {
                         self.reset_coarse_y();
                     }
@@ -396,20 +409,10 @@ impl Ppu {
             }
             _ => unreachable!(),
         }
-
-        self.cycle += 1;
-        if self.cycle > 340 {
-            self.cycle = 0;
-            self.scanline += 1;
-            if self.scanline > 261 {
-                self.scanline = 0;
-                self.odd = !self.odd;
-            }
-        }
     }
 
     fn read_mem(&mut self, cart: &mut Cart, addr: u16) -> u8 {
-        match addr {
+        match addr % 0x4000 {
             // Pattern tables
             0x0000..=0x0FFF => cart.read_pattern_table(self, 0, addr % 0x1000),
             0x1000..=0x1FFF => cart.read_pattern_table(self, 1, addr % 0x1000),
@@ -422,12 +425,9 @@ impl Ppu {
             // TODO: Mapped by cartridge
             0x3000..=0x3EFF => 0,
             // Palette ram indexes, mirrored every 0x20 values
-            0x3F00..=0x3F1F => self.palette[(addr % 0x20) as usize],
+            0x3F00..=0x3FFF => self.palette[(addr % 0x20) as usize],
 
-            _ => unreachable!(
-                "Address ${:#04x} is outside of the address space for the PPU",
-                addr
-            ),
+            _ => unreachable!(),
         }
     }
 
@@ -445,13 +445,10 @@ impl Ppu {
             // TODO: Mapped by cartridge
             0x3000..=0x3EFF => {}
             // Palette ram indexes, mirrored every 0x20 values
-            0x3F00..=0x3F1F => self.palette[(addr % 0x20) as usize] = v,
+            0x3F00..=0x3FFF => self.palette[(addr % 0x20) as usize] = v,
 
             _ => {
-                unreachable!(
-                    "Address ${:#04x} is outside of the address space for the PPU",
-                    addr
-                )
+                unreachable!()
             }
         }
     }
@@ -479,17 +476,11 @@ impl Ppu {
     }
 
     fn fetch_pt_low(&mut self, cart: &mut Cart) {
-        self.next_pt_low = cart.get_sprite_i(
-            self.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
-            self.next_nt,
-        )[self.fine_y() as usize];
+        self.next_pt_low = cart.get_sprite_i(1, self.next_nt)[self.fine_y() as usize];
     }
 
     fn fetch_pt_high(&mut self, cart: &mut Cart) {
-        self.next_pt_high = cart.get_sprite_i(
-            self.ppuctrl.intersects(PpuCtrl::NAMETABLE_ADDRESS) as u8,
-            self.next_nt,
-        )[8 + self.fine_y() as usize];
+        self.next_pt_high = cart.get_sprite_i(1, self.next_nt)[8 + self.fine_y() as usize];
     }
 
     fn fine_y(&self) -> u8 {
