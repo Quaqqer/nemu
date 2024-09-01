@@ -238,7 +238,7 @@ impl Ppu {
                         self.t &= !(0b11111 << 5);
                         self.t |= ((v as u16 >> 3) & 0b11111) << 5;
 
-                        // Set fine x
+                        // Set fine y
                         self.t &= !(0b111 << 12);
                         self.t |= (v as u16 & 0b111) << 12;
                     }
@@ -347,7 +347,10 @@ impl Ppu {
                     // Start vblank
                     // Remove sprite 0 hit on vblank?
                     self.ppustatus |= PpuStatus::VBLANK;
-                    self.nmi = true;
+
+                    if self.ppuctrl.intersects(PpuCtrl::NMI) {
+                        self.nmi = true;
+                    }
                 }
             }
             242..261 => {}
@@ -361,7 +364,7 @@ impl Ppu {
                             | PpuStatus::SPRITE_0_HIT
                             | PpuStatus::SPRITE_OVERFLOW;
                     }
-                    280..305 => {
+                    280..=304 => {
                         self.reset_coarse_y();
                     }
                     _ => {}
@@ -423,7 +426,7 @@ impl Ppu {
     }
 
     fn write_mem(&mut self, cart: &mut Cart, addr: u16, v: u8) {
-        match addr {
+        match addr % 0x4000 {
             // Pattern tables
             0x0000..=0x0FFF => cart.write_pattern_table(self, 0, addr % 0x1000, v),
             0x1000..=0x1FFF => cart.write_pattern_table(self, 1, addr % 0x1000, v),
@@ -438,10 +441,12 @@ impl Ppu {
             // Palette ram indexes, mirrored every 0x20 values
             0x3F00..=0x3F1F => self.palette[(addr % 0x20) as usize] = v,
 
-            _ => unreachable!(
-                "Address ${:#04x} is outside of the address space for the PPU",
-                addr
-            ),
+            _ => {
+                unreachable!(
+                    "Address ${:#04x} is outside of the address space for the PPU",
+                    addr
+                )
+            }
         }
     }
 
