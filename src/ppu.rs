@@ -476,11 +476,17 @@ impl Ppu {
     }
 
     fn fetch_pt_low(&mut self, cart: &mut Cart) {
-        self.next_pt_low = cart.get_sprite_i(1, self.next_nt)[self.fine_y() as usize];
+        self.next_pt_low = cart.get_sprite_i(
+            self.ppuctrl.intersects(PpuCtrl::BACKGROUND) as u8,
+            self.next_nt,
+        )[self.fine_y() as usize];
     }
 
     fn fetch_pt_high(&mut self, cart: &mut Cart) {
-        self.next_pt_high = cart.get_sprite_i(1, self.next_nt)[8 + self.fine_y() as usize];
+        self.next_pt_high = cart.get_sprite_i(
+            self.ppuctrl.intersects(PpuCtrl::BACKGROUND) as u8,
+            self.next_nt,
+        )[8 + self.fine_y() as usize];
     }
 
     fn fine_y(&self) -> u8 {
