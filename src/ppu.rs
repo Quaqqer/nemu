@@ -300,6 +300,12 @@ impl Ppu {
 
                 // Scroll
                 match cycle {
+                    0 => {
+                        // Saw no documentation for this, but it seems reasonable and produces good
+                        // results.
+                        self.fine_x = 0;
+                    }
+
                     8..256 if cycle % 8 == 0 => {
                         self.inc_coarse_x();
                     }
@@ -333,7 +339,7 @@ impl Ppu {
                 }
 
                 if cycle < 256 {
-                    self.draw_px();
+                    self.draw_bg_px();
                 }
 
                 self.fine_x = (self.fine_x + 1) % 8;
@@ -517,7 +523,7 @@ impl Ppu {
         }
     }
 
-    fn draw_px(&mut self) {
+    fn draw_bg_px(&mut self) {
         debug_assert!((0..256).contains(&self.cycle));
         debug_assert!((0..240).contains(&self.scanline));
 

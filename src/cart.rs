@@ -165,11 +165,15 @@ impl Cart {
     }
 
     pub fn write_pattern_table(&mut self, _ppu: &mut Ppu, pattern_table: u8, addr: u16, v: u8) {
-        // TODO: Shouldn't always be readable?
-        debug_assert!(addr < 0x1000);
-        debug_assert!(pattern_table <= 1);
-
-        self.chr[0x1000 * pattern_table as usize + addr as usize] = v
+        match self.mapper {
+            Mapper::NES1_0 => {}
+        }
+        // If it was writeable
+        // // TODO: Shouldn't always be readable?
+        // debug_assert!(addr < 0x1000);
+        // debug_assert!(pattern_table <= 1);
+        //
+        // self.chr[0x1000 * pattern_table as usize + addr as usize] = v
     }
 
     pub fn read_nametable_tile(

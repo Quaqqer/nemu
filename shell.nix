@@ -10,6 +10,8 @@ let
       xorg.libXi
       xorg.libXcursor
       libxkbcommon
+      gtk3
+      glib
     ]
   );
 in
