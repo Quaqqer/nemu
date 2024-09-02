@@ -2,7 +2,7 @@ use crate::{
     apu::Apu,
     cart::Cart,
     cpu::{Cpu, CpuBus},
-    ppu::{Display, Ppu},
+    ppu::{Display, Ppu, PpuCtrl},
 };
 
 pub struct Emulator {
@@ -41,7 +41,7 @@ impl Emulator {
         } = self;
 
         let did_nmi = ppu.nmi;
-        if ppu.nmi {
+        if ppu.nmi && ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
             cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
         }
         ppu.nmi = false;

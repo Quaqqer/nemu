@@ -327,9 +327,7 @@ impl Ppu {
                 // Remove sprite 0 hit on vblank?
                 self.ppustatus |= PpuStatus::VBLANK;
 
-                if self.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
-                    self.nmi = true;
-                }
+                self.nmi = true;
             }
             (261, 1) => {
                 self.ppustatus -=
