@@ -478,7 +478,7 @@ impl Ppu {
         let attr_addr =
             0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
         self.next_at = self.read_mem(cart, attr_addr);
-        self.next_palette_i = match (self.coarse_y() % 2, self.coarse_x() % 2) {
+        self.next_palette_i = match (self.coarse_y() % 4 / 2, self.coarse_x() % 4 / 2) {
             (0, 0) => (self.next_at >> 0) & 0x3,
             (0, 1) => (self.next_at >> 2) & 0x3,
             (1, 0) => (self.next_at >> 4) & 0x3,
