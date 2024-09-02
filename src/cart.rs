@@ -42,7 +42,7 @@ impl Cart {
 
         let flags_7 = bin[7];
 
-        let mapper_n = (flags_6 << 4) + ((flags_7 & 0xf0) >> 4);
+        let mapper_n = (flags_6 >> 4) | (flags_7 & 0xf0);
         let mapper = Mapper::from_number(mapper_n);
 
         let flags_8 = bin[8];

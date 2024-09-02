@@ -7,16 +7,17 @@ pub struct PpuCtrl(u8);
 bitflags! {
     impl PpuCtrl: u8 {
         /// The 9th bit of the x-coordinate of the scroll
-        const X                 = 0b00000001;
+        const X                = 0b00000001;
         /// The 9th bit of the y-coordinate of the scroll
-        const Y                 = 0b00000010;
-        const NAMETABLE_ADDRESS = 0b00000011;
-        const INCREMENT         = 0b00000100;
-        const SPRITE_ADDRESS    = 0b00001000;
-        const BACKGROUND        = 0b00010000;
-        const SPRITE_SIZE       = 0b00100000;
-        const MASTER_SLAVE      = 0b01000000;
-        const NMI               = 0b10000000;
+        const Y                = 0b00000010;
+        const NAMETABLE_SELECT = 0b00000011;
+        const INCREMENT_MODE   = 0b00000100;
+        const SPRITE_TILE      = 0b00001000;
+        const BACKGROUND_TILE  = 0b00010000;
+        const SPRITE_HEIGHT    = 0b00100000;
+        // Not implemented
+        const MASTER_SLAVE     = 0b01000000;
+        const NMI_ENABLE       = 0b10000000;
     }
 }
 
@@ -31,17 +32,20 @@ pub struct PpuMask(u8);
 
 bitflags! {
     impl PpuMask: u8 {
-        /// Grayscale mode
-        const GREYSCALE             = 0b00000001;
+        /// Not implemented
+        const GREYSCALE              = 0b00000001;
         /// Show leftmost 8 bg pixels
-        const SHOW_LEFTMOST_BG      = 0b00000010;
+        const BACKGROUND_LEFT_ENABLE = 0b00000010;
         /// Show leftmost 8 sprite pixels
-        const SHOW_LEFTMOST_SPRITES = 0b00000100;
-        const SHOW_BACKGROUND       = 0b00001000;
-        const SHOW_SPRITES          = 0b00010000;
-        const EMPH_RED              = 0b00100000;
-        const EMPH_GREEN            = 0b01000000;
-        const EMPH_BLUE             = 0b10000000;
+        const SPRITE_LEFT_ENABLE     = 0b00000100;
+        const BACKGROUND_ENABLE      = 0b00001000;
+        const SPRITE_ENABLE          = 0b00010000;
+        // Not implemented
+        const EMPH_RED               = 0b00100000;
+        // Not implemented
+        const EMPH_GREEN             = 0b01000000;
+        // Not implemented
+        const EMPH_BLUE              = 0b10000000;
     }
 }
 
@@ -109,6 +113,11 @@ pub struct Ppu {
     next_pt_low: u8,
     next_pt_high: u8,
     next_palette_i: u8,
+    next2_nt: u8,
+    next2_at: u8,
+    next2_pt_low: u8,
+    next2_pt_high: u8,
+    next2_palette_i: u8,
 }
 
 impl Ppu {
@@ -148,6 +157,11 @@ impl Ppu {
             next_pt_low: 0,
             next_pt_high: 0,
             next_palette_i: 0,
+            next2_nt: 0,
+            next2_at: 0,
+            next2_pt_low: 0,
+            next2_pt_high: 0,
+            next2_palette_i: 0,
         }
     }
 
@@ -165,10 +179,16 @@ impl Ppu {
             0
         } else {
             match (addr - 0x2000) % 0x8 {
+                // $2000
+                //
                 // Control
                 0 => 0,
+                // $2001
+                //
                 // Mask
                 1 => 0,
+                // $2002
+                //
                 // Status
                 2 => {
                     let status = self.ppustatus.bits();
@@ -176,14 +196,24 @@ impl Ppu {
                     self.latch_toggle = false;
                     status
                 }
+                // $2003
+                //
                 // OAM address
                 3 => 0,
+                // $2004
+                //
                 // OAM data
                 4 => self.oam[self.oamaddr as usize],
+                // $2005
+                //
                 // Scroll
                 5 => 0,
+                // $2006
+                //
                 // Addr
                 6 => 0,
+                // $2007
+                //
                 // Data
                 7 => {
                     // TODO: Some stuff should be done different here apparently
@@ -271,7 +301,7 @@ impl Ppu {
     }
 
     fn ppudata_increase(&self) -> u16 {
-        match self.ppuctrl.intersects(PpuCtrl::INCREMENT) {
+        match self.ppuctrl.intersects(PpuCtrl::INCREMENT_MODE) {
             false => 1,
             true => 32,
         }
@@ -287,7 +317,7 @@ impl Ppu {
     }
 
     pub fn cycle(&mut self, cart: &mut Cart) {
-        if self.ppumask.intersects(PpuMask::SHOW_BACKGROUND) {
+        if self.ppumask.intersects(PpuMask::BACKGROUND_ENABLE) {
             self.render_bg(cart);
         }
 
@@ -297,7 +327,7 @@ impl Ppu {
                 // Remove sprite 0 hit on vblank?
                 self.ppustatus |= PpuStatus::VBLANK;
 
-                if self.ppuctrl.intersects(PpuCtrl::NMI) {
+                if self.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
                     self.nmi = true;
                 }
             }
@@ -314,6 +344,7 @@ impl Ppu {
             self.scanline += 1;
             if self.scanline > 261 {
                 self.scanline = 0;
+
                 self.odd = !self.odd;
             }
         }
@@ -324,39 +355,43 @@ impl Ppu {
         let scanline = self.scanline;
 
         match scanline {
-            0..240 => {
-                // Visible scanlines
-                if cycle % 8 == 0 {
-                    self.set_nexts();
+            // Visible scanlines and pre-render scanline
+            0..240 | 261 => {
+                // Set shift registers
+                if cycle % 8 == 1 {
+                    self.shift_registers();
                 }
 
                 // Fetches
                 match cycle {
-                    0..=255 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    0..=255 if cycle % 8 == 3 => self.fetch_at(cart),
-                    0..=255 if cycle % 8 == 5 => self.fetch_pt_low(cart),
-                    0..=255 if cycle % 8 == 7 => self.fetch_pt_high(cart),
+                    0..=256 | 321..=336 if cycle % 8 == 1 => {
+                        self.next2_nt = self.fetch_nt(cart);
+                    }
+                    0..=256 | 321..=336 if cycle % 8 == 3 => {
+                        self.next2_at = self.fetch_at(cart);
+                        self.next2_palette_i = self.fetch_palette_i();
+                    }
+                    0..=256 | 321..=336 if cycle % 8 == 5 => {
+                        self.next2_pt_low = self.fetch_pt_low(cart);
+                    }
+                    0..=256 | 321..=336 if cycle % 8 == 7 => {
+                        self.next2_pt_high = self.fetch_pt_high(cart);
+                    }
 
-                    257..=320 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    257..=320 if cycle % 8 == 3 => self.fetch_nt(cart),
-
-                    321..=336 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    321..=336 if cycle % 8 == 3 => self.fetch_at(cart),
-                    321..=336 if cycle % 8 == 5 => self.fetch_pt_low(cart),
-                    321..=336 if cycle % 8 == 7 => self.fetch_pt_high(cart),
-                    337 | 339 => self.fetch_nt(cart),
+                    257..=320 if cycle % 8 == 1 => {
+                        self.fetch_nt(cart);
+                    }
+                    257..=320 if cycle % 8 == 3 => {
+                        self.fetch_nt(cart);
+                    }
+                    337 | 339 => {
+                        self.fetch_nt(cart);
+                    }
                     _ => {}
                 }
 
                 // Scroll
                 match cycle {
-                    0 => {
-                        // FIXME
-                        // Saw no documentation for this, but it seems reasonable and produces good
-                        // results.
-                        self.fine_x = 0;
-                    }
-
                     8..256 if cycle % 8 == 0 => {
                         self.inc_coarse_x();
                     }
@@ -370,12 +405,27 @@ impl Ppu {
                     328 | 336 => self.inc_coarse_x(),
                     _ => {}
                 }
-
-                if cycle < 256 {
-                    self.draw_bg_px();
+                if scanline == 261 {
+                    match cycle {
+                        280..=304 => self.reset_coarse_y(),
+                        _ => {}
+                    }
                 }
 
-                self.fine_x = (self.fine_x + 1) % 8;
+                // Draw background pixel
+                if scanline != 261 {
+                    match cycle {
+                        1..8 => {
+                            if self.ppumask.intersects(PpuMask::BACKGROUND_LEFT_ENABLE) {
+                                self.draw_bg_px()
+                            }
+                        }
+                        8..=256 => {
+                            self.draw_bg_px();
+                        }
+                        _ => {}
+                    }
+                }
             }
 
             // Post-render scanline, idle
@@ -383,34 +433,6 @@ impl Ppu {
             // Vertical blanking lines
             241..261 => {}
             // Pre-render scanline
-            261 => {
-                // Special stuff
-                match cycle {
-                    // Clear vblank, sprite 0, sprite overflow
-                    280..=304 => {
-                        self.reset_coarse_y();
-                    }
-                    _ => {}
-                }
-
-                // Fetches
-                match cycle {
-                    0..=255 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    0..=255 if cycle % 8 == 3 => self.fetch_at(cart),
-                    0..=255 if cycle % 8 == 5 => self.fetch_pt_low(cart),
-                    0..=255 if cycle % 8 == 7 => self.fetch_pt_high(cart),
-
-                    257..=320 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    257..=320 if cycle % 8 == 3 => self.fetch_nt(cart),
-
-                    321..=336 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    321..=336 if cycle % 8 == 3 => self.fetch_at(cart),
-                    321..=336 if cycle % 8 == 5 => self.fetch_pt_low(cart),
-                    321..=336 if cycle % 8 == 7 => self.fetch_pt_high(cart),
-                    337 | 339 => self.fetch_nt(cart),
-                    _ => {}
-                }
-            }
             _ => unreachable!(),
         }
     }
@@ -461,7 +483,12 @@ impl Ppu {
         &self.display
     }
 
-    fn set_nexts(&mut self) {
+    fn shift_registers(&mut self) {
+        self.next_nt = self.next2_nt;
+        self.next_at = self.next2_at;
+        self.next_pt_low = self.next2_pt_low;
+        self.next_pt_high = self.next2_pt_high;
+        self.next_palette_i = self.next2_palette_i;
         self.nt = self.next_nt;
         self.at = self.next_at;
         self.pt_low = self.next_pt_low;
@@ -469,36 +496,29 @@ impl Ppu {
         self.palette_i = self.next_palette_i;
     }
 
-    fn fetch_nt(&mut self, cart: &mut Cart) {
+    fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
         let nt_addr = 0x2000 | (self.v & 0x0FFF);
-        self.next_nt = self.read_mem(cart, nt_addr);
+        self.read_mem(cart, nt_addr)
     }
 
-    fn fetch_at(&mut self, cart: &mut Cart) {
+    fn fetch_at(&mut self, cart: &mut Cart) -> u8 {
         let attr_addr =
             0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
-        self.next_at = self.read_mem(cart, attr_addr);
-        self.next_palette_i = match (self.coarse_y() % 4 / 2, self.coarse_x() % 4 / 2) {
-            (0, 0) => (self.next_at >> 0) & 0x3,
-            (0, 1) => (self.next_at >> 2) & 0x3,
-            (1, 0) => (self.next_at >> 4) & 0x3,
-            (1, 1) => (self.next_at >> 6) & 0x3,
-            _ => unreachable!(),
-        }
+        self.read_mem(cart, attr_addr)
     }
 
-    fn fetch_pt_low(&mut self, cart: &mut Cart) {
-        self.next_pt_low = cart.get_sprite_i(
-            self.ppuctrl.intersects(PpuCtrl::BACKGROUND) as u8,
+    fn fetch_pt_low(&mut self, cart: &mut Cart) -> u8 {
+        cart.get_sprite_i(
+            self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
             self.next_nt,
-        )[self.fine_y() as usize];
+        )[self.fine_y() as usize]
     }
 
-    fn fetch_pt_high(&mut self, cart: &mut Cart) {
-        self.next_pt_high = cart.get_sprite_i(
-            self.ppuctrl.intersects(PpuCtrl::BACKGROUND) as u8,
+    fn fetch_pt_high(&mut self, cart: &mut Cart) -> u8 {
+        cart.get_sprite_i(
+            self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
             self.next_nt,
-        )[8 + self.fine_y() as usize];
+        )[8 + self.fine_y() as usize]
     }
 
     fn fine_y(&self) -> u8 {
@@ -541,14 +561,14 @@ impl Ppu {
     }
 
     fn draw_bg_px(&mut self) {
-        debug_assert!((0..256).contains(&self.cycle));
+        debug_assert!((1..257).contains(&self.cycle));
         debug_assert!((0..240).contains(&self.scanline));
 
-        let x = self.cycle;
+        let x = self.cycle - 1;
         let y = self.scanline;
 
-        let px_low = (self.pt_low >> (7 - self.fine_x)) & 0b1;
-        let px_high = (self.pt_high >> (7 - self.fine_x)) & 0b1;
+        let px_low = (self.pt_low >> ((self.fine_x as u16).wrapping_sub(self.cycle) % 8)) & 0b1;
+        let px_high = (self.pt_high >> ((self.fine_x as u16).wrapping_sub(self.cycle) % 8)) & 0b1;
 
         let px = (px_high << 1) | px_low;
 
@@ -562,6 +582,24 @@ impl Ppu {
         };
 
         self.display.set_pixel(x as usize, y as usize, (r, g, b));
+    }
+
+    fn draw_oam_px(&mut self) {
+        for (i, bytes) in self.oam.chunks(4).enumerate() {
+            let &[b0, b1, b2, b3] = bytes else {
+                unreachable!();
+            };
+
+            let y = b0;
+
+            let pattern_table = if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
+                b1 & 0x1
+            } else {
+                self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u8
+            };
+
+            let tile_number = b1 >> 1;
+        }
     }
 
     /// Get a palette
@@ -581,6 +619,16 @@ impl Ppu {
     fn reset_coarse_y(&mut self) {
         self.v &= !(0b111101111100000);
         self.v |= self.t & (0b111101111100000);
+    }
+
+    fn fetch_palette_i(&self) -> u8 {
+        match (self.coarse_y() % 4 / 2, self.coarse_x() % 4 / 2) {
+            (0, 0) => (self.next_at >> 0) & 0x3,
+            (0, 1) => (self.next_at >> 2) & 0x3,
+            (1, 0) => (self.next_at >> 4) & 0x3,
+            (1, 1) => (self.next_at >> 6) & 0x3,
+            _ => unreachable!(),
+        }
     }
 }
 

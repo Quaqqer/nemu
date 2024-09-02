@@ -474,7 +474,7 @@ impl NemuApp {
                                 cart.inspect_nametable(ppu, nt, row as u16 * 32 + col as u16);
 
                             let sprite = cart.get_sprite_i(
-                                ppu.ppuctrl.intersects(PpuCtrl::BACKGROUND) as u8,
+                                ppu.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
                                 nt_entry,
                             );
                             for dy in 0..8 {
