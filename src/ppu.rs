@@ -103,10 +103,12 @@ pub struct Ppu {
     at: u8,
     pt_low: u8,
     pt_high: u8,
+    palette_i: u8,
     next_nt: u8,
     next_at: u8,
     next_pt_low: u8,
     next_pt_high: u8,
+    next_palette_i: u8,
 }
 
 impl Ppu {
@@ -140,10 +142,12 @@ impl Ppu {
             at: 0,
             pt_low: 0,
             pt_high: 0,
+            palette_i: 0,
             next_nt: 0,
             next_at: 0,
             next_pt_low: 0,
             next_pt_high: 0,
+            next_palette_i: 0,
         }
     }
 
@@ -326,6 +330,24 @@ impl Ppu {
                     self.set_nexts();
                 }
 
+                // Fetches
+                match cycle {
+                    0..=255 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    0..=255 if cycle % 8 == 3 => self.fetch_at(cart),
+                    0..=255 if cycle % 8 == 5 => self.fetch_pt_low(cart),
+                    0..=255 if cycle % 8 == 7 => self.fetch_pt_high(cart),
+
+                    257..=320 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    257..=320 if cycle % 8 == 3 => self.fetch_nt(cart),
+
+                    321..=336 if cycle % 8 == 1 => self.fetch_nt(cart),
+                    321..=336 if cycle % 8 == 3 => self.fetch_at(cart),
+                    321..=336 if cycle % 8 == 5 => self.fetch_pt_low(cart),
+                    321..=336 if cycle % 8 == 7 => self.fetch_pt_high(cart),
+                    337 | 339 => self.fetch_nt(cart),
+                    _ => {}
+                }
+
                 // Scroll
                 match cycle {
                     0 => {
@@ -346,24 +368,6 @@ impl Ppu {
                         self.reset_coarse_x();
                     }
                     328 | 336 => self.inc_coarse_x(),
-                    _ => {}
-                }
-
-                // Fetches
-                match cycle {
-                    0..=255 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    0..=255 if cycle % 8 == 3 => self.fetch_at(cart),
-                    0..=255 if cycle % 8 == 5 => self.fetch_pt_low(cart),
-                    0..=255 if cycle % 8 == 7 => self.fetch_pt_high(cart),
-
-                    257..=320 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    257..=320 if cycle % 8 == 3 => self.fetch_nt(cart),
-
-                    321..=336 if cycle % 8 == 1 => self.fetch_nt(cart),
-                    321..=336 if cycle % 8 == 3 => self.fetch_at(cart),
-                    321..=336 if cycle % 8 == 5 => self.fetch_pt_low(cart),
-                    321..=336 if cycle % 8 == 7 => self.fetch_pt_high(cart),
-                    337 | 339 => self.fetch_nt(cart),
                     _ => {}
                 }
 
@@ -462,6 +466,7 @@ impl Ppu {
         self.at = self.next_at;
         self.pt_low = self.next_pt_low;
         self.pt_high = self.next_pt_high;
+        self.palette_i = self.next_palette_i;
     }
 
     fn fetch_nt(&mut self, cart: &mut Cart) {
@@ -473,6 +478,13 @@ impl Ppu {
         let attr_addr =
             0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
         self.next_at = self.read_mem(cart, attr_addr);
+        self.next_palette_i = match (self.coarse_y() % 2, self.coarse_x() % 2) {
+            (0, 0) => (self.next_at >> 0) & 0x3,
+            (0, 1) => (self.next_at >> 2) & 0x3,
+            (1, 0) => (self.next_at >> 4) & 0x3,
+            (1, 1) => (self.next_at >> 6) & 0x3,
+            _ => unreachable!(),
+        }
     }
 
     fn fetch_pt_low(&mut self, cart: &mut Cart) {
@@ -520,6 +532,14 @@ impl Ppu {
         }
     }
 
+    fn coarse_x(&self) -> u16 {
+        self.v & 0x1FF
+    }
+
+    fn coarse_y(&self) -> u16 {
+        (self.v >> 5) & 0x1FF
+    }
+
     fn draw_bg_px(&mut self) {
         debug_assert!((0..256).contains(&self.cycle));
         debug_assert!((0..240).contains(&self.scanline));
@@ -529,17 +549,28 @@ impl Ppu {
 
         let px_low = (self.pt_low >> (7 - self.fine_x)) & 0b1;
         let px_high = (self.pt_high >> (7 - self.fine_x)) & 0b1;
+
         let px = (px_high << 1) | px_low;
 
-        let rgb = match px {
-            0 => (0, 0, 0),
-            1 => (125, 0, 0),
-            2 => (0, 125, 0),
-            3 => (0, 0, 125),
-            _ => unreachable!(),
+        let palette = self.get_palette(if px != 0 { self.palette_i } else { 0 });
+
+        let palette_color_i = palette[px as usize] & 0x7F;
+
+        let &[r, g, b] = &PALETTE[palette_color_i as usize * 3..palette_color_i as usize * 3 + 3]
+        else {
+            unreachable!()
         };
 
-        self.display.set_pixel(x as usize, y as usize, rgb);
+        self.display.set_pixel(x as usize, y as usize, (r, g, b));
+    }
+
+    /// Get a palette
+    ///
+    /// * `i`: Palette index, BG: 0-3, FG: 4-7
+    fn get_palette(&self, i: u8) -> &[u8; 4] {
+        (&self.palette[i as usize * 4..i as usize * 4 + 4])
+            .try_into()
+            .unwrap()
     }
 
     fn reset_coarse_x(&mut self) {
@@ -590,6 +621,8 @@ impl Display {
         self.pixels[base + 2] = b;
     }
 }
+
+pub const PALETTE: &[u8; 3 * 64 * 8] = include_bytes!("../res/palette/2c02.pal");
 
 #[cfg(test)]
 mod tests {
