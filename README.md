@@ -1,15 +1,26 @@
 # Nemu
 
-Nemu is my WIP nes emulator. Currently CPU emulation is pretty complete, it
-passes the entire headless NesTest rom. I have started working on the picture
-processing unit (PPU), which will give me graphics, but I have yet to render
-my first pixel.
+Nemu is my WIP nes emulator. Currently it can boot Donkey Kong which runs and
+almost renders the background correctly.
 
-There is a GUI, but since neither input nor output (graphics, audio) has been
-implemented yet it only acts as a debugging utility. In the UI there is a CPU
-debugging helper and a pattern table viewer (showing the currently loaded
-sprites).
+![A screenshot of Nemu running Donkey Kong with debugging utilities](https://raw.githubusercontent.com/Quaqqer/nemu/master/screenshot.png)
 
-## Screenshot
+## Features
 
-![A screenshot of the debugging utilities of Nemu](https://raw.githubusercontent.com/Quaqqer/nemu/master/screenshot.png)
+- CPU emulation
+- PPU emulation
+  - **Note** Currently only background is rendered
+- Debugging
+  - CPU info viewer
+  - PPU info viewer
+  - Pattern table viewer
+  - Nametable viewer
+
+## Missing features
+
+- Sprite rendering
+- Controller inputs
+
+## Mappers
+
+Currently only mapper 0 is implemented, since Nemu is still in its infant stages.
