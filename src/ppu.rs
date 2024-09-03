@@ -103,21 +103,15 @@ pub struct Ppu {
 
     display: Display,
 
-    nt: u8,
-    at: u8,
-    pt_low: u8,
-    pt_high: u8,
-    palette_i: u8,
-    next_nt: u8,
-    next_at: u8,
-    next_pt_low: u8,
-    next_pt_high: u8,
-    next_palette_i: u8,
-    next2_nt: u8,
-    next2_at: u8,
-    next2_pt_low: u8,
-    next2_pt_high: u8,
-    next2_palette_i: u8,
+    bg_shift_pt_low: u16,
+    bg_shift_pt_high: u16,
+    bg_shift_at_low: u16,
+    bg_shift_at_high: u16,
+
+    bg_next_nt: u8,
+    bg_next_at: u8,
+    bg_next_pt_low: u8,
+    bg_next_pt_high: u8,
 }
 
 impl Ppu {
@@ -147,21 +141,14 @@ impl Ppu {
 
             display: Display::new(),
 
-            nt: 0,
-            at: 0,
-            pt_low: 0,
-            pt_high: 0,
-            palette_i: 0,
-            next_nt: 0,
-            next_at: 0,
-            next_pt_low: 0,
-            next_pt_high: 0,
-            next_palette_i: 0,
-            next2_nt: 0,
-            next2_at: 0,
-            next2_pt_low: 0,
-            next2_pt_high: 0,
-            next2_palette_i: 0,
+            bg_shift_pt_low: 0,
+            bg_shift_pt_high: 0,
+            bg_shift_at_low: 0,
+            bg_shift_at_high: 0,
+            bg_next_nt: 0,
+            bg_next_at: 0,
+            bg_next_pt_low: 0,
+            bg_next_pt_high: 0,
         }
     }
 
@@ -356,73 +343,62 @@ impl Ppu {
             // Visible scanlines and pre-render scanline
             0..240 | 261 => {
                 // Set shift registers
-                if cycle % 8 == 1 {
-                    self.shift_registers();
+                if (2..258).contains(&cycle) {
+                    self.update_shifters();
                 }
 
                 // Fetches
-                match cycle {
-                    0..=256 | 321..=336 if cycle % 8 == 1 => {
-                        self.next2_nt = self.fetch_nt(cart);
+                if (2..258).contains(&cycle) || (321..338).contains(&cycle) {
+                    match cycle % 8 {
+                        1 => {
+                            self.load_shifters();
+                            self.bg_next_nt = self.fetch_nt(cart);
+                        }
+                        3 => {
+                            self.bg_next_at = self.fetch_at(cart);
+                        }
+                        5 => {
+                            self.bg_next_pt_low = self.fetch_pt_low(cart);
+                        }
+                        7 => {
+                            self.bg_next_pt_high = self.fetch_pt_high(cart);
+                        }
+                        _ => {}
                     }
-                    0..=256 | 321..=336 if cycle % 8 == 3 => {
-                        self.next2_at = self.fetch_at(cart);
-                        self.next2_palette_i = self.fetch_palette_i();
-                    }
-                    0..=256 | 321..=336 if cycle % 8 == 5 => {
-                        self.next2_pt_low = self.fetch_pt_low(cart);
-                    }
-                    0..=256 | 321..=336 if cycle % 8 == 7 => {
-                        self.next2_pt_high = self.fetch_pt_high(cart);
-                    }
-
-                    257..=320 if cycle % 8 == 1 => {
-                        self.fetch_nt(cart);
-                    }
-                    257..=320 if cycle % 8 == 3 => {
-                        self.fetch_nt(cart);
-                    }
-                    337 | 339 => {
-                        self.fetch_nt(cart);
-                    }
-                    _ => {}
                 }
 
                 // Scroll
+                // x scroll
                 match cycle {
-                    8..256 if cycle % 8 == 0 => {
-                        self.inc_coarse_x();
-                    }
-                    256 => {
-                        self.inc_coarse_x();
-                        self.inc_fine_y();
-                    }
-                    257 => {
-                        self.reset_coarse_x();
-                    }
+                    8..=256 if cycle % 8 == 0 => self.inc_coarse_x(),
+                    257 => self.reset_coarse_x(),
                     328 | 336 => self.inc_coarse_x(),
                     _ => {}
                 }
-                if scanline == 261 {
-                    match cycle {
-                        280..=304 => self.reset_coarse_y(),
-                        _ => {}
-                    }
+                // y scroll
+                match cycle {
+                    256 => self.inc_fine_y(),
+                    280..=304 if self.scanline == 261 => self.reset_coarse_y(),
+                    _ => {}
                 }
 
                 // Draw background pixel
-                if scanline != 261 {
-                    match cycle {
-                        1..8 => {
-                            if self.ppumask.intersects(PpuMask::BACKGROUND_LEFT_ENABLE) {
-                                self.draw_bg_px()
-                            }
-                        }
-                        8..=256 => {
-                            self.draw_bg_px();
-                        }
-                        _ => {}
-                    }
+                if scanline != 261 && (1..=256).contains(&cycle) {
+                    let bit_mux = 0x8000 >> self.fine_x;
+
+                    let px_low = ((self.bg_shift_pt_low & bit_mux) != 0) as u8;
+                    let px_high = ((self.bg_shift_pt_high & bit_mux) != 0) as u8;
+                    let px = (px_high << 1) | px_low;
+
+                    let at_low = ((self.bg_shift_at_low & bit_mux) != 0) as u8;
+                    let at_high = ((self.bg_shift_at_high & bit_mux) != 0) as u8;
+                    let at = (at_high << 1) | at_low;
+
+                    self.display.set_pixel(
+                        self.cycle as usize - 1,
+                        self.scanline as usize,
+                        self.get_palette_color(at, px),
+                    );
                 }
             }
 
@@ -481,17 +457,20 @@ impl Ppu {
         &self.display
     }
 
-    fn shift_registers(&mut self) {
-        self.next_nt = self.next2_nt;
-        self.next_at = self.next2_at;
-        self.next_pt_low = self.next2_pt_low;
-        self.next_pt_high = self.next2_pt_high;
-        self.next_palette_i = self.next2_palette_i;
-        self.nt = self.next_nt;
-        self.at = self.next_at;
-        self.pt_low = self.next_pt_low;
-        self.pt_high = self.next_pt_high;
-        self.palette_i = self.next_palette_i;
+    fn load_shifters(&mut self) {
+        self.bg_shift_pt_low = (self.bg_shift_pt_low & 0xff00) | self.bg_next_pt_low as u16;
+        self.bg_shift_pt_high = (self.bg_shift_pt_high & 0xff00) | self.bg_next_pt_high as u16;
+        self.bg_shift_at_low =
+            (self.bg_shift_at_low & 0xff00) | if self.bg_next_at & 1 != 0 { 0xff } else { 0x0 };
+        self.bg_shift_at_high =
+            (self.bg_shift_at_high & 0xff00) | if self.bg_next_at & 2 != 0 { 0xff } else { 0x0 };
+    }
+
+    fn update_shifters(&mut self) {
+        self.bg_shift_pt_low <<= 1;
+        self.bg_shift_pt_high <<= 1;
+        self.bg_shift_at_low <<= 1;
+        self.bg_shift_at_high <<= 1;
     }
 
     fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
@@ -502,20 +481,28 @@ impl Ppu {
     fn fetch_at(&mut self, cart: &mut Cart) -> u8 {
         let attr_addr =
             0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
-        self.read_mem(cart, attr_addr)
+        let mut attr = self.read_mem(cart, attr_addr);
+        if self.coarse_y() & 0x02 != 0 {
+            attr >>= 4;
+        }
+        if self.coarse_x() & 0x02 != 0 {
+            attr >>= 2;
+        }
+        attr &= 0x03;
+        attr
     }
 
     fn fetch_pt_low(&mut self, cart: &mut Cart) -> u8 {
         cart.get_sprite_i(
             self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
-            self.next_nt,
+            self.bg_next_nt,
         )[self.fine_y() as usize]
     }
 
     fn fetch_pt_high(&mut self, cart: &mut Cart) -> u8 {
         cart.get_sprite_i(
             self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
-            self.next_nt,
+            self.bg_next_nt,
         )[8 + self.fine_y() as usize]
     }
 
@@ -558,48 +545,6 @@ impl Ppu {
         (self.v >> 5) & 0x1FF
     }
 
-    fn draw_bg_px(&mut self) {
-        debug_assert!((1..257).contains(&self.cycle));
-        debug_assert!((0..240).contains(&self.scanline));
-
-        let x = self.cycle - 1;
-        let y = self.scanline;
-
-        let px_low = (self.pt_low >> ((self.fine_x as u16).wrapping_sub(self.cycle) % 8)) & 0b1;
-        let px_high = (self.pt_high >> ((self.fine_x as u16).wrapping_sub(self.cycle) % 8)) & 0b1;
-
-        let px = (px_high << 1) | px_low;
-
-        let palette = self.get_palette(if px != 0 { self.palette_i } else { 0 });
-
-        let palette_color_i = palette[px as usize] & 0x7F;
-
-        let &[r, g, b] = &PALETTE[palette_color_i as usize * 3..palette_color_i as usize * 3 + 3]
-        else {
-            unreachable!()
-        };
-
-        self.display.set_pixel(x as usize, y as usize, (r, g, b));
-    }
-
-    fn draw_oam_px(&mut self) {
-        for (i, bytes) in self.oam.chunks(4).enumerate() {
-            let &[b0, b1, b2, b3] = bytes else {
-                unreachable!();
-            };
-
-            let y = b0;
-
-            let pattern_table = if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
-                b1 & 0x1
-            } else {
-                self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u8
-            };
-
-            let tile_number = b1 >> 1;
-        }
-    }
-
     /// Get a palette
     ///
     /// * `i`: Palette index, BG: 0-3, FG: 4-7
@@ -607,6 +552,19 @@ impl Ppu {
         (&self.palette[i as usize * 4..i as usize * 4 + 4])
             .try_into()
             .unwrap()
+    }
+
+    /// Get a color from the palette
+    ///
+    /// * `palette_i`: The palette index, 0-7
+    /// * `color`: The color in the palette, 0-3
+    fn get_palette_color(&self, palette_i: u8, color: u8) -> (u8, u8, u8) {
+        let palette = self.get_palette(palette_i);
+        let c = palette[color as usize] as usize & 0x3F;
+        let &[r, g, b] = &PALETTE[c * 3..c * 3 + 3] else {
+            unreachable!()
+        };
+        (r, g, b)
     }
 
     fn reset_coarse_x(&mut self) {
@@ -617,16 +575,6 @@ impl Ppu {
     fn reset_coarse_y(&mut self) {
         self.v &= !(0b111101111100000);
         self.v |= self.t & (0b111101111100000);
-    }
-
-    fn fetch_palette_i(&self) -> u8 {
-        match (self.coarse_y() % 4 / 2, self.coarse_x() % 4 / 2) {
-            (0, 0) => (self.next_at >> 0) & 0x3,
-            (0, 1) => (self.next_at >> 2) & 0x3,
-            (1, 0) => (self.next_at >> 4) & 0x3,
-            (1, 1) => (self.next_at >> 6) & 0x3,
-            _ => unreachable!(),
-        }
     }
 }
 

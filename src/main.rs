@@ -545,7 +545,7 @@ impl NemuApp {
         let mut palette_row = [(0, 0, 0); 4];
 
         for (i, &p) in palette_ram.iter().enumerate() {
-            let pi = (p as usize & 0x7F) * 3;
+            let pi = (p as usize & 0x3F) * 3;
             let &[r, g, b] = &palette[pi..pi + 3] else {
                 unreachable!();
             };
