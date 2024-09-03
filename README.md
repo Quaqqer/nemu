@@ -24,3 +24,11 @@ almost renders the background correctly.
 ## Mappers
 
 Currently only mapper 0 is implemented, since Nemu is still in its infant stages.
+
+## Acknowledgements
+
+Thanks to
+
+- The [NESDev wiki](https://www.nesdev.org/) for providing a reference for the NES hardware
+- Nestest for providing a great test suite for the CPU
+- [javid9x](https://www.youtube.com/@javidx9) for videos explaining how the NES PPU works

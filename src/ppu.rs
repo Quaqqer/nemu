@@ -95,7 +95,7 @@ pub struct Ppu {
     pub fine_x: u8,
 
     pub vram: [u8; 0x800],
-    palette: [u8; 0x20],
+    pub palette: [u8; 0x20],
     pub oam: [u8; 0x100],
     odd: bool,
 
@@ -668,7 +668,16 @@ impl Display {
     }
 }
 
-pub const PALETTE: &[u8; 3 * 64 * 8] = include_bytes!("../res/palette/2c02.pal");
+pub const PALETTE: [u8; 3 * 64] = {
+    let mut palette = [0; 3 * 64];
+    let bytes = include_bytes!("../res/palette/2c02.pal");
+    let mut i = 0;
+    while i < 3 * 64 {
+        palette[i] = bytes[i];
+        i += 1;
+    }
+    palette
+};
 
 #[cfg(test)]
 mod tests {

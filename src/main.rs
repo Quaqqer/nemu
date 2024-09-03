@@ -2,14 +2,14 @@
 #![feature(let_chains)]
 
 use eframe::egui::{
-    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, TextureHandle,
-    TextureOptions, Vec2,
+    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, Frame, Pos2, Rect,
+    Rounding, TextureHandle, TextureOptions, Ui, Vec2,
 };
 use egui::Id;
 use nemu::{
     cpu::{Cpu, CpuBus},
     emulator::Emulator,
-    ppu::PpuCtrl,
+    ppu::{PpuCtrl, PALETTE},
 };
 
 fn main() {
@@ -43,6 +43,8 @@ struct NemuApp {
     ppu_debug_open: bool,
     pattern_tables_open: bool,
     nametable_open: bool,
+
+    selected_palette: u8,
 }
 
 impl NemuApp {
@@ -83,6 +85,8 @@ impl NemuApp {
             ppu_debug_open: false,
             pattern_tables_open: false,
             nametable_open: false,
+
+            selected_palette: 0,
         }
     }
 
@@ -230,6 +234,9 @@ impl eframe::App for NemuApp {
                         if let Some(emu) = self.emulator.as_mut() {
                             emu.step_frame();
                         }
+                    }
+                    egui::Key::M => {
+                        self.selected_palette = (self.selected_palette + 1) % 8;
                     }
                     _ => {}
                 },
@@ -417,13 +424,15 @@ impl NemuApp {
                                 emu.cart
                                     .get_sprite_pixel(page, tile_x, tile_y, x % 8, y % 8);
 
-                            let color = match pixel {
-                                0 => Color32::BLACK,
-                                1 => Color32::GREEN,
-                                2 => Color32::BLUE,
-                                3 => Color32::WHITE,
-                                _ => unreachable!(),
-                            };
+                            let palette = Self::palette(
+                                &emu.ppu.palette[self.selected_palette as usize * 4
+                                    ..self.selected_palette as usize * 4 + 4]
+                                    .try_into()
+                                    .unwrap(),
+                                &PALETTE,
+                            );
+                            let (r, g, b) = palette[pixel as usize];
+                            let color = Color32::from_rgb(r, g, b);
 
                             let base = ((y as usize * 128) + x as usize) * 3;
                             buf[base] = color.r();
@@ -450,6 +459,15 @@ impl NemuApp {
                 ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                     ui.add(pt1);
                     ui.add(pt2);
+                });
+
+                ui.vertical(|ui| {
+                    for (i, palette_ram) in emu.ppu.palette.chunks(4).enumerate() {
+                        Self::palette_row(
+                            ui,
+                            Self::palette(palette_ram.try_into().unwrap(), &PALETTE),
+                        );
+                    }
                 });
             });
     }
@@ -521,5 +539,33 @@ impl NemuApp {
                     ui.end_row();
                 });
             });
+    }
+
+    fn palette(palette_ram: &[u8; 4], palette: &[u8; 64 * 3]) -> [(u8, u8, u8); 4] {
+        let mut palette_row = [(0, 0, 0); 4];
+
+        for (i, &p) in palette_ram.iter().enumerate() {
+            let pi = (p as usize & 0x7F) * 3;
+            let &[r, g, b] = &palette[pi..pi + 3] else {
+                unreachable!();
+            };
+            palette_row[i] = (r, g, b);
+        }
+
+        palette_row
+    }
+
+    fn palette_row(ui: &mut Ui, colors: [(u8, u8, u8); 4]) {
+        let w = 10.;
+
+        ui.horizontal(|ui| {
+            for &(r, g, b) in colors.iter() {
+                let rect = ui.allocate_space(Vec2::new(w, w)).1;
+                let color = Color32::from_rgb(r, g, b);
+                let rounding = 0.;
+
+                ui.painter().rect_filled(rect, rounding, color);
+            }
+        });
     }
 }
