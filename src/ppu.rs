@@ -331,6 +331,11 @@ impl Ppu {
                 self.scanline = 0;
 
                 self.odd = !self.odd;
+
+                // Skip (0, 0) on odd cycles
+                if self.odd {
+                    self.cycle = 1
+                };
             }
         }
     }
@@ -347,24 +352,31 @@ impl Ppu {
                     self.update_shifters();
                 }
 
-                // Fetches
-                if (2..258).contains(&cycle) || (321..338).contains(&cycle) {
-                    match cycle % 8 {
-                        1 => {
-                            self.load_shifters();
-                            self.bg_next_nt = self.fetch_nt(cart);
-                        }
-                        3 => {
-                            self.bg_next_at = self.fetch_at(cart);
-                        }
-                        5 => {
-                            self.bg_next_pt_low = self.fetch_pt_low(cart);
-                        }
-                        7 => {
-                            self.bg_next_pt_high = self.fetch_pt_high(cart);
-                        }
-                        _ => {}
+                let ordinary_fetch = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
+                    1 => {
+                        ppu.load_shifters();
+                        ppu.bg_next_nt = ppu.fetch_nt(cart)
                     }
+                    3 => ppu.bg_next_at = ppu.fetch_at(cart),
+                    5 => ppu.bg_next_pt_low = ppu.fetch_pt_low(cart),
+                    7 => ppu.bg_next_pt_high = ppu.fetch_pt_high(cart),
+                    _ => {}
+                };
+
+                let garbage_nts = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
+                    1 | 3 => {
+                        ppu.bg_next_nt = ppu.fetch_nt(cart);
+                    }
+                    _ => {}
+                };
+
+                // Fetches
+                match cycle {
+                    1..=256 => ordinary_fetch(self, cart, cycle),
+                    257..=320 => garbage_nts(self, cart, cycle),
+                    321..=336 => ordinary_fetch(self, cart, cycle),
+                    337..=340 => garbage_nts(self, cart, cycle),
+                    _ => {}
                 }
 
                 // Scroll
@@ -506,7 +518,7 @@ impl Ppu {
         )[8 + self.fine_y() as usize]
     }
 
-    fn fine_y(&self) -> u8 {
+    pub fn fine_y(&self) -> u8 {
         (self.v >> 12) as u8 & 0b111
     }
 
@@ -537,12 +549,16 @@ impl Ppu {
         }
     }
 
-    fn coarse_x(&self) -> u16 {
+    pub fn coarse_x(&self) -> u16 {
         self.v & 0x1FF
     }
 
-    fn coarse_y(&self) -> u16 {
+    pub fn coarse_y(&self) -> u16 {
         (self.v >> 5) & 0x1FF
+    }
+
+    pub fn fine_x(&self) -> u8 {
+        self.fine_x
     }
 
     /// Get a palette

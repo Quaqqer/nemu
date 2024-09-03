@@ -399,6 +399,22 @@ impl NemuApp {
                     ui.label("Cycle");
                     ui.label(format!("{}", ppu.cycle));
                     ui.end_row();
+
+                    ui.label("Coarse x");
+                    ui.label(format!("{}", ppu.coarse_x()));
+                    ui.end_row();
+
+                    ui.label("Coarse y");
+                    ui.label(format!("{}", ppu.coarse_y()));
+                    ui.end_row();
+
+                    ui.label("Fine x");
+                    ui.label(format!("{}", ppu.fine_x()));
+                    ui.end_row();
+
+                    ui.label("Fine y");
+                    ui.label(format!("{}", ppu.fine_y()));
+                    ui.end_row();
                 });
             });
     }
