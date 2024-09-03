@@ -328,6 +328,8 @@ impl Ppu {
             self.cycle = 0;
             self.scanline += 1;
             if self.scanline > 261 {
+                self.display.clear();
+
                 self.scanline = 0;
 
                 self.odd = !self.odd;
@@ -347,9 +349,10 @@ impl Ppu {
         match scanline {
             // Visible scanlines and pre-render scanline
             0..240 | 261 => {
-                // Set shift registers
-                if (2..258).contains(&cycle) {
-                    self.update_shifters();
+                // Update shifter registers
+                match cycle {
+                    2..258 | 321..338 => self.update_shifters(),
+                    _ => {}
                 }
 
                 let ordinary_fetch = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
@@ -633,6 +636,10 @@ impl Display {
         self.pixels[base] = r;
         self.pixels[base + 1] = g;
         self.pixels[base + 2] = b;
+    }
+
+    pub fn clear(&mut self) {
+        self.pixels.fill(0);
     }
 }
 
