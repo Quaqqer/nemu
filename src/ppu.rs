@@ -380,17 +380,17 @@ impl Ppu {
                 }
 
                 // Scroll
-                // x scroll
-                match cycle {
-                    8..=256 if cycle % 8 == 0 => self.inc_coarse_x(),
-                    257 => self.reset_coarse_x(),
-                    328 | 336 => self.inc_coarse_x(),
-                    _ => {}
-                }
                 // y scroll
                 match cycle {
                     256 => self.inc_fine_y(),
-                    280..=304 if self.scanline == 261 => self.reset_coarse_y(),
+                    280..=304 if self.scanline == 261 => self.transfer_y(),
+                    _ => {}
+                }
+                // x scroll
+                match cycle {
+                    8..=256 if cycle % 8 == 0 => self.inc_coarse_x(),
+                    257 => self.transfer_coarse_x(),
+                    328 | 336 => self.inc_coarse_x(),
                     _ => {}
                 }
 
@@ -505,21 +505,25 @@ impl Ppu {
     }
 
     fn fetch_pt_low(&mut self, cart: &mut Cart) -> u8 {
-        cart.get_sprite_i(
-            self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
-            self.bg_next_nt,
-        )[self.fine_y() as usize]
+        self.read_mem(
+            cart,
+            (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
+                | (self.bg_next_nt as u16) << 4
+                | (self.fine_y() as u16 + 0),
+        )
     }
 
     fn fetch_pt_high(&mut self, cart: &mut Cart) -> u8 {
-        cart.get_sprite_i(
-            self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u8,
-            self.bg_next_nt,
-        )[8 + self.fine_y() as usize]
+        self.read_mem(
+            cart,
+            (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
+                | (self.bg_next_nt as u16) << 4
+                | (self.fine_y() as u16 + 8),
+        )
     }
 
     pub fn fine_y(&self) -> u8 {
-        (self.v >> 12) as u8 & 0b111
+        (self.v >> 12) as u8 & 0x7
     }
 
     fn inc_fine_y(&mut self) {
@@ -550,11 +554,11 @@ impl Ppu {
     }
 
     pub fn coarse_x(&self) -> u16 {
-        self.v & 0x1FF
+        self.v & 0x1F
     }
 
     pub fn coarse_y(&self) -> u16 {
-        (self.v >> 5) & 0x1FF
+        (self.v >> 5) & 0x1F
     }
 
     pub fn fine_x(&self) -> u8 {
@@ -583,14 +587,14 @@ impl Ppu {
         (r, g, b)
     }
 
-    fn reset_coarse_x(&mut self) {
-        self.v &= !(0b0100_00011111);
-        self.v |= self.t & (0b0100_00011111);
+    fn transfer_coarse_x(&mut self) {
+        self.v &= !(0x41f);
+        self.v |= self.t & (0x41f);
     }
 
-    fn reset_coarse_y(&mut self) {
-        self.v &= !(0b111101111100000);
-        self.v |= self.t & (0b111101111100000);
+    fn transfer_y(&mut self) {
+        self.v &= 0x41f;
+        self.v |= self.t & !(0x41f);
     }
 }
 
