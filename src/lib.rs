@@ -3,6 +3,7 @@
 
 pub mod apu;
 pub mod cart;
+pub mod controller;
 pub mod cpu;
 pub mod emulator;
 pub mod op;

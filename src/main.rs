@@ -7,6 +7,7 @@ use eframe::egui::{
 };
 use egui::Id;
 use nemu::{
+    controller::NesController,
     cpu::{Cpu, CpuBus},
     emulator::Emulator,
     ppu::{PpuCtrl, PALETTE},
@@ -238,6 +239,94 @@ impl eframe::App for NemuApp {
                     egui::Key::M => {
                         self.selected_palette = (self.selected_palette + 1) % 8;
                     }
+
+                    egui::Key::ArrowUp => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::UP;
+                        }
+                    }
+                    egui::Key::ArrowDown => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::DOWN;
+                        }
+                    }
+                    egui::Key::ArrowLeft => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::LEFT;
+                        }
+                    }
+                    egui::Key::ArrowRight => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::RIGHT;
+                        }
+                    }
+                    egui::Key::Enter => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::START;
+                        }
+                    }
+                    egui::Key::Backspace => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::SELECT;
+                        }
+                    }
+                    egui::Key::Z => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::B;
+                        }
+                    }
+                    egui::Key::X => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] |= NesController::A;
+                        }
+                    }
+                    _ => {}
+                },
+                egui::Event::Key {
+                    key,
+                    pressed: false,
+                    ..
+                } => match key {
+                    egui::Key::ArrowUp => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::UP;
+                        }
+                    }
+                    egui::Key::ArrowDown => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::DOWN;
+                        }
+                    }
+                    egui::Key::ArrowLeft => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::LEFT;
+                        }
+                    }
+                    egui::Key::ArrowRight => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::RIGHT;
+                        }
+                    }
+                    egui::Key::Enter => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::START;
+                        }
+                    }
+                    egui::Key::Backspace => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::SELECT;
+                        }
+                    }
+                    egui::Key::Z => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::B;
+                        }
+                    }
+                    egui::Key::X => {
+                        if let Some(emu) = &mut self.emulator {
+                            emu.controllers[0] -= NesController::A;
+                        }
+                    }
                     _ => {}
                 },
                 _ => {}
@@ -261,9 +350,10 @@ impl NemuApp {
                     apu,
                     ppu,
                     cart,
+                    controllers, controller_shifters
                 } = emu;
 
-                let cpu_bus = &mut CpuBus { apu, ppu, cart };
+                let cpu_bus = &mut CpuBus { apu, ppu, cart, controllers, controller_shifters };
 
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
                     ui.label("PC");

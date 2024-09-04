@@ -1,5 +1,6 @@
 use crate::apu::Apu;
 use crate::cart::Cart;
+use crate::controller::NesController;
 use crate::op::{AddrMode, Op, OPCODE_MATRIX};
 use crate::ppu::Ppu;
 use bitflags::bitflags;
@@ -47,6 +48,8 @@ pub struct CpuBus<'a> {
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
     pub cart: &'a mut Cart,
+    pub controllers: &'a [NesController; 2],
+    pub controller_shifters: &'a mut [u8; 2],
 }
 
 impl std::fmt::Debug for Cpu {
@@ -79,7 +82,17 @@ impl Cpu {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
             0x2000..=0x3FFF => bus.ppu.cpu_read_register(bus.cart, addr),
-            0x4000..=0x4017 => bus.apu.read_register(addr),
+            0x4000..=0x4015 => bus.apu.read_register(addr),
+            0x4016 => {
+                let v = (bus.controller_shifters[0] & 0x80 != 0) as u8;
+                bus.controller_shifters[0] <<= 1;
+                v
+            }
+            0x4017 => {
+                let v = (bus.controller_shifters[0] & 0x80 != 0) as u8;
+                bus.controller_shifters[0] <<= 1;
+                v
+            }
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
@@ -140,8 +153,14 @@ impl Cpu {
             0x4014 => {
                 self.oam_dma(bus, val);
             }
-            0x4000..=0x4017 => {
+            0x4000..=0x4015 => {
                 bus.apu.write_register(addr, val);
+            }
+            0x4016 => {
+                bus.controller_shifters[0] = bus.controllers[0].bits();
+            }
+            0x4017 => {
+                bus.controller_shifters[0] = bus.controllers[0].bits();
             }
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")

@@ -1,6 +1,7 @@
 use crate::{
     apu::Apu,
     cart::Cart,
+    controller::NesController,
     cpu::{Cpu, CpuBus},
     ppu::{Display, Ppu, PpuCtrl},
 };
@@ -10,6 +11,8 @@ pub struct Emulator {
     pub apu: Apu,
     pub ppu: Ppu,
     pub cart: Cart,
+    pub controllers: [NesController; 2],
+    pub controller_shifters: [u8; 2],
 }
 
 impl Emulator {
@@ -38,15 +41,29 @@ impl Emulator {
             apu,
             ppu,
             cart,
+            controllers,
+            controller_shifters: controller_states,
         } = self;
 
         let did_nmi = ppu.nmi;
         if ppu.nmi && ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
-            cpu.nmi_interrupt(&mut CpuBus { apu, ppu, cart });
+            cpu.nmi_interrupt(&mut CpuBus {
+                apu,
+                ppu,
+                cart,
+                controllers,
+                controller_shifters: controller_states,
+            });
         }
         ppu.nmi = false;
 
-        let cpu_cycles = cpu.tick(&mut CpuBus { apu, ppu, cart });
+        let cpu_cycles = cpu.tick(&mut CpuBus {
+            apu,
+            ppu,
+            cart,
+            controllers,
+            controller_shifters: controller_states,
+        });
 
         for _ in 0..cpu_cycles * 3 {
             ppu.cycle(cart);
@@ -64,6 +81,8 @@ impl Emulator {
             apu: Apu::new(),
             ppu: Ppu::new(),
             cart,
+            controllers: [NesController::empty(); 2],
+            controller_shifters: [0x0; 2],
         };
 
         let Emulator {
@@ -71,9 +90,17 @@ impl Emulator {
             apu,
             ppu,
             cart,
+            controllers,
+            controller_shifters: controller_states,
         } = &mut emu;
 
-        cpu.init(&mut CpuBus { apu, ppu, cart });
+        cpu.init(&mut CpuBus {
+            apu,
+            ppu,
+            cart,
+            controllers,
+            controller_shifters: controller_states,
+        });
 
         emu
     }
