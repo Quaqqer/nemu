@@ -1,6 +1,7 @@
 # Nemu
 
-Nemu is my WIP nes emulator. Currently it can run Donkey Kong quite successfully.
+Nemu is my WIP nes emulator. Currently it can run Donkey Kong quite
+successfully, and at least the first levels in Super Mario Bros.
 
 ![A video of Nemu running Donkey Kong](https://raw.githubusercontent.com/Quaqqer/nemu/master/res/github/dk.gif)
 ![A screenshot of Nemu running Donkey Kong with debugging utilities](https://raw.githubusercontent.com/Quaqqer/nemu/master/res/github/screenshot.png)
