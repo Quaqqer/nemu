@@ -548,10 +548,10 @@ impl Ppu {
                                         1..9 if self.ppumask & left_status == left_status => {
                                             self.ppustatus |= PpuStatus::SPRITE_0_HIT;
                                         }
-                                        9..258 if self.ppumask & left_status == left_status => {
+                                        9..258 => {
                                             self.ppustatus |= PpuStatus::SPRITE_0_HIT;
                                         }
-                                        _ => unreachable!(),
+                                        _ => {}
                                     }
                                 }
 
