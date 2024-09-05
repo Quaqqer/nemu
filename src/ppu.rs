@@ -27,7 +27,7 @@ impl std::fmt::Display for PpuCtrl {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct PpuMask(u8);
 
 bitflags! {
@@ -110,6 +110,7 @@ pub struct Ppu {
     odd: bool,
 
     sprite_scanline: Vec<[u8; 4]>,
+    sprite_0_in_scanline: bool,
     sprite_px_lo: Vec<u8>,
     sprite_px_hi: Vec<u8>,
 
@@ -147,6 +148,7 @@ impl Ppu {
             odd: false,
 
             sprite_scanline: Vec::new(),
+            sprite_0_in_scanline: false,
             sprite_px_lo: Vec::new(),
             sprite_px_hi: Vec::new(),
 
@@ -343,6 +345,7 @@ impl Ppu {
                     // Find sprites for line
                     if self.cycle == 257 {
                         self.sprite_scanline.clear();
+                        self.sprite_0_in_scanline = false;
 
                         for i in 0..64 {
                             let &[b0, b1, b2, b3] = &self.oam[i * 4..i * 4 + 4] else {
@@ -365,6 +368,10 @@ impl Ppu {
                                 }
 
                                 self.sprite_scanline.push([b0, b1, b2, b3]);
+
+                                if i == 0 {
+                                    self.sprite_0_in_scanline = true;
+                                }
                             }
                         }
                     }
@@ -494,6 +501,8 @@ impl Ppu {
                         (px, pal)
                     };
 
+                    let mut sprite_0_rendered = false;
+
                     let (fg_px, fg_pal, fg_prio) = {
                         let mut fg_px = 0;
                         let mut fg_pal = 0;
@@ -510,6 +519,10 @@ impl Ppu {
                                 fg_prio = !attrs.intersects(SpriteFlags::PRIO);
 
                                 if fg_px != 0 {
+                                    if i == 0 {
+                                        sprite_0_rendered = true;
+                                    }
+
                                     break;
                                 }
                             }
@@ -523,6 +536,29 @@ impl Ppu {
                         (0, _) => (fg_px, fg_pal),
                         (_, 0) => (bg_px, bg_pal),
                         (_, _) => {
+                            // Update sprite 0 hit detection
+                            if self.sprite_0_in_scanline && sprite_0_rendered {
+                                let expected_status =
+                                    PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE;
+                                let left_status =
+                                    PpuMask::BACKGROUND_LEFT_ENABLE | PpuMask::SPRITE_LEFT_ENABLE;
+
+                                if self.ppumask & expected_status == expected_status {
+                                    match self.cycle {
+                                        1..9 if self.ppumask & left_status == left_status => {
+                                            self.ppustatus |= PpuStatus::SPRITE_0_HIT;
+                                        }
+                                        9..258 if self.ppumask & left_status == left_status => {
+                                            self.ppustatus |= PpuStatus::SPRITE_0_HIT;
+                                        }
+                                        _ => unreachable!(),
+                                    }
+                                }
+
+                                self.ppustatus |= PpuStatus::SPRITE_0_HIT;
+                            }
+
+                            // Get the prioritised pixel
                             if fg_prio {
                                 (fg_px, fg_pal)
                             } else {
