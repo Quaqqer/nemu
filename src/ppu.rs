@@ -339,97 +339,101 @@ impl Ppu {
                     _ => {}
                 }
 
-                // Find sprites for line
-                if self.cycle == 257 {
-                    self.sprite_scanline.clear();
+                if self.scanline != 261 {
+                    // Find sprites for line
+                    if self.cycle == 257 {
+                        self.sprite_scanline.clear();
 
-                    for i in 0..64 {
-                        let &[b0, b1, b2, b3] = &self.oam[i * 4..i * 4 + 4] else {
-                            unreachable!();
-                        };
+                        for i in 0..64 {
+                            let &[b0, b1, b2, b3] = &self.oam[i * 4..i * 4 + 4] else {
+                                unreachable!();
+                            };
 
-                        let y = b0;
+                            let y = b0;
 
-                        let diff = self.scanline as i32 - y as i32;
-                        let sprite_h = if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
-                            16
-                        } else {
-                            8
-                        };
+                            let diff = self.scanline as i32 - y as i32;
+                            let sprite_h = if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
+                                16
+                            } else {
+                                8
+                            };
 
-                        if (0..sprite_h).contains(&diff) {
-                            if self.sprite_scanline.len() == 8 {
-                                self.ppustatus |= PpuStatus::SPRITE_OVERFLOW;
-                                break;
+                            if (0..sprite_h).contains(&diff) {
+                                if self.sprite_scanline.len() == 8 {
+                                    self.ppustatus |= PpuStatus::SPRITE_OVERFLOW;
+                                    break;
+                                }
+
+                                self.sprite_scanline.push([b0, b1, b2, b3]);
                             }
-
-                            self.sprite_scanline.push([b0, b1, b2, b3]);
                         }
                     }
-                }
 
-                // Load sprites
-                if self.cycle == 340 {
-                    self.sprite_px_lo.clear();
-                    self.sprite_px_hi.clear();
+                    // Load sprites
+                    if self.cycle == 340 {
+                        self.sprite_px_lo.clear();
+                        self.sprite_px_hi.clear();
 
-                    for i in 0..self.sprite_scanline.len() {
-                        let &[b0, b1, b2, _] = &self.sprite_scanline[i];
+                        for i in 0..self.sprite_scanline.len() {
+                            let &[b0, b1, b2, _] = &self.sprite_scanline[i];
 
-                        let attrs = SpriteFlags::from_bits_truncate(b2);
+                            let attrs = SpriteFlags::from_bits_truncate(b2);
 
-                        let pattern_lo_addr: u16;
-                        if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
-                            // 8x16
-                            if attrs.intersects(SpriteFlags::FLIP_V) {
-                                if self.scanline.wrapping_sub(b0 as u16) < 8 {
-                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
-                                        | ((((b1 as u16) & 0xFE) + 1) << 4)
-                                        | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                            let pattern_lo_addr: u16;
+                            if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
+                                // 8x16
+                                if attrs.intersects(SpriteFlags::FLIP_V) {
+                                    if self.scanline.wrapping_sub(b0 as u16) < 8 {
+                                        pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                            | ((((b1 as u16) & 0xFE) + 1) << 4)
+                                            | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                    } else {
+                                        pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                            | (((b1 as u16) & 0xFE) << 4)
+                                            | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                    }
                                 } else {
-                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
-                                        | (((b1 as u16) & 0xFE) << 4)
-                                        | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                    if self.scanline.wrapping_sub(b0 as u16) < 8 {
+                                        pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                            | (((b1 as u16) & 0xFE) << 4)
+                                            | ((self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                    } else {
+                                        pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                            | ((((b1 as u16) & 0xFE) + 1) << 4)
+                                            | ((self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                    }
                                 }
                             } else {
-                                if self.scanline.wrapping_sub(b0 as u16) < 8 {
-                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
-                                        | (((b1 as u16) & 0xFE) << 4)
-                                        | ((self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                // 8x8
+
+                                if attrs.intersects(SpriteFlags::FLIP_V) {
+                                    pattern_lo_addr =
+                                        ((self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u16)
+                                            << 12)
+                                            | ((b1 as u16) << 4)
+                                            | (7 - self.scanline.wrapping_sub(b0 as u16));
                                 } else {
-                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
-                                        | ((((b1 as u16) & 0xFE) + 1) << 4)
-                                        | ((self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                    pattern_lo_addr =
+                                        ((self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u16)
+                                            << 12)
+                                            | ((b1 as u16) << 4)
+                                            | self.scanline.wrapping_sub(b0 as u16);
                                 }
                             }
-                        } else {
-                            // 8x8
 
-                            if attrs.intersects(SpriteFlags::FLIP_V) {
-                                pattern_lo_addr =
-                                    ((self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u16) << 12)
-                                        | ((b1 as u16) << 4)
-                                        | (7 - self.scanline.wrapping_sub(b0 as u16));
-                            } else {
-                                pattern_lo_addr =
-                                    ((self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u16) << 12)
-                                        | ((b1 as u16) << 4)
-                                        | self.scanline.wrapping_sub(b0 as u16);
+                            let pattern_hi_addr = pattern_lo_addr + 8;
+
+                            let mut bits_lo = self.read_mem(cart, pattern_lo_addr);
+                            let mut bits_hi = self.read_mem(cart, pattern_hi_addr);
+
+                            if attrs.intersects(SpriteFlags::FLIP_H) {
+                                bits_lo = bits_lo.reverse_bits();
+                                bits_hi = bits_hi.reverse_bits();
                             }
+
+                            self.sprite_px_lo.push(bits_lo);
+                            self.sprite_px_hi.push(bits_hi);
                         }
-
-                        let pattern_hi_addr = pattern_lo_addr + 8;
-
-                        let mut bits_lo = self.read_mem(cart, pattern_lo_addr);
-                        let mut bits_hi = self.read_mem(cart, pattern_hi_addr);
-
-                        if attrs.intersects(SpriteFlags::FLIP_H) {
-                            bits_lo = bits_lo.reverse_bits();
-                            bits_hi = bits_hi.reverse_bits();
-                        }
-
-                        self.sprite_px_lo.push(bits_lo);
-                        self.sprite_px_hi.push(bits_hi);
                     }
                 }
 
@@ -555,7 +559,9 @@ impl Ppu {
             (261, 1) => {
                 self.ppustatus -=
                     PpuStatus::VBLANK | PpuStatus::SPRITE_0_HIT | PpuStatus::SPRITE_OVERFLOW;
+                self.sprite_scanline.clear();
                 self.sprite_px_lo.clear();
+                self.sprite_px_hi.clear();
             }
             _ => {}
         }
