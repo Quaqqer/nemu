@@ -2,8 +2,8 @@
 #![feature(let_chains)]
 
 use eframe::egui::{
-    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, Frame, Pos2, Rect,
-    Rounding, TextureHandle, TextureOptions, Ui, Vec2,
+    self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, TextureHandle,
+    TextureOptions, Ui, Vec2,
 };
 use egui::Id;
 use nemu::{
@@ -46,6 +46,8 @@ struct NemuApp {
     nametable_open: bool,
 
     selected_palette: u8,
+
+    last_frame: std::time::Instant,
 }
 
 impl NemuApp {
@@ -88,6 +90,8 @@ impl NemuApp {
             nametable_open: false,
 
             selected_palette: 0,
+
+            last_frame: std::time::Instant::now(),
         }
     }
 
@@ -114,8 +118,12 @@ impl NemuApp {
 impl eframe::App for NemuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Some(emu) = self.emulator.as_mut() {
-            if !self.paused {
+            if !self.paused
+                && std::time::Instant::now().duration_since(self.last_frame)
+                    > std::time::Duration::from_millis(1000 / 60)
+            {
                 emu.step_frame();
+                self.last_frame = std::time::Instant::now();
             }
 
             let frame = emu.display();
