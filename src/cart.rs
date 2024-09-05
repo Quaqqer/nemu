@@ -193,15 +193,15 @@ impl Cart {
         match self.mirroring {
             Mirroring::Horizontal => match nametable {
                 0 => ppu.vram[addr as usize],
-                1 => ppu.vram[0x400 + addr as usize],
-                2 => ppu.vram[addr as usize],
+                1 => ppu.vram[addr as usize],
+                2 => ppu.vram[0x400 + addr as usize],
                 3 => ppu.vram[0x400 + addr as usize],
                 _ => unreachable!(),
             },
             Mirroring::Vertical => match nametable {
                 0 => ppu.vram[addr as usize],
-                1 => ppu.vram[addr as usize],
-                2 => ppu.vram[0x400 + addr as usize],
+                1 => ppu.vram[0x400 + addr as usize],
+                2 => ppu.vram[addr as usize],
                 3 => ppu.vram[0x400 + addr as usize],
                 _ => unreachable!(),
             },
@@ -215,15 +215,15 @@ impl Cart {
         match self.mirroring {
             Mirroring::Horizontal => match nametable {
                 0 => ppu.vram[addr as usize],
-                1 => ppu.vram[0x400 + addr as usize],
-                2 => ppu.vram[addr as usize],
+                1 => ppu.vram[addr as usize],
+                2 => ppu.vram[0x400 + addr as usize],
                 3 => ppu.vram[0x400 + addr as usize],
                 _ => unreachable!(),
             },
             Mirroring::Vertical => match nametable {
                 0 => ppu.vram[addr as usize],
-                1 => ppu.vram[addr as usize],
-                2 => ppu.vram[0x400 + addr as usize],
+                1 => ppu.vram[0x400 + addr as usize],
+                2 => ppu.vram[addr as usize],
                 3 => ppu.vram[0x400 + addr as usize],
                 _ => unreachable!(),
             },
@@ -237,15 +237,15 @@ impl Cart {
         match self.mirroring {
             Mirroring::Horizontal => match nametable {
                 0 => ppu.vram[addr as usize] = v,
-                2 => ppu.vram[0x400 + addr as usize] = v,
                 1 => ppu.vram[addr as usize] = v,
+                2 => ppu.vram[0x400 + addr as usize] = v,
                 3 => ppu.vram[0x400 + addr as usize] = v,
                 _ => unreachable!(),
             },
             Mirroring::Vertical => match nametable {
                 0 => ppu.vram[addr as usize] = v,
-                2 => ppu.vram[addr as usize] = v,
                 1 => ppu.vram[0x400 + addr as usize] = v,
+                2 => ppu.vram[addr as usize] = v,
                 3 => ppu.vram[0x400 + addr as usize] = v,
                 _ => unreachable!(),
             },
