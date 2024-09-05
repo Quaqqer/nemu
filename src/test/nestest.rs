@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod tests {
+    use crate::controller::NesController;
     use crate::{apu::Apu, cpu::CpuBus, ppu::Ppu};
     use crate::{cart::Cart, cpu::Cpu};
 
@@ -57,6 +58,8 @@ mod tests {
             apu: &mut Apu::new(),
             ppu: &mut Ppu::new(),
             cart,
+            controllers: &[NesController::empty(); 2],
+            controller_shifters: &mut [0x0; 2],
         };
 
         cpu.pc = 0xC000;
