@@ -49,6 +49,16 @@ bitflags! {
     }
 }
 
+bitflags! {
+    #[derive(Clone, Copy)]
+    pub struct SpriteFlags: u8 {
+        const FLIP_V = 0x80;
+        const FLIP_H = 0x40;
+        const PRIO = 0x20;
+        const PALETTE = 0x3;
+    }
+}
+
 impl std::fmt::Display for PpuMask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         crate::util::fmt_bitflags_u8(self.bits(), ['b', 'g', 'r', 's', 'b', 's', 'b', 'm'], f)
@@ -99,6 +109,10 @@ pub struct Ppu {
     pub oam: [u8; 0x100],
     odd: bool,
 
+    sprite_scanline: Vec<[u8; 4]>,
+    sprite_px_lo: Vec<u8>,
+    sprite_px_hi: Vec<u8>,
+
     pub nmi: bool,
 
     display: Display,
@@ -131,6 +145,10 @@ impl Ppu {
             palette: [0x00; 32],
             oam: [0x00; 256],
             odd: false,
+
+            sprite_scanline: Vec::new(),
+            sprite_px_lo: Vec::new(),
+            sprite_px_hi: Vec::new(),
 
             scanline: 261,
             cycle: 0,
@@ -304,10 +322,228 @@ impl Ppu {
     }
 
     pub fn cycle(&mut self, cart: &mut Cart) {
-        if self.ppumask.intersects(PpuMask::BACKGROUND_ENABLE) {
-            self.render_bg(cart);
+        match self.scanline {
+            // Visible scanlines and pre-render scanline
+            0..240 | 261 => {
+                // Update background shifter registers
+                match self.cycle {
+                    2..258 | 321..338 => {
+                        self.update_bg_shifters();
+                    }
+                    _ => {}
+                }
+
+                // Update foreground shifter registers
+                match self.cycle {
+                    2..258 => self.update_fg_shifters(),
+                    _ => {}
+                }
+
+                // Find sprites for line
+                if self.cycle == 257 {
+                    self.sprite_scanline.clear();
+
+                    for i in 0..64 {
+                        let &[b0, b1, b2, b3] = &self.oam[i * 4..i * 4 + 4] else {
+                            unreachable!();
+                        };
+
+                        let y = b0;
+
+                        let diff = self.scanline as i32 - y as i32;
+                        let sprite_h = if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
+                            16
+                        } else {
+                            8
+                        };
+
+                        if (0..sprite_h).contains(&diff) {
+                            if self.sprite_scanline.len() == 8 {
+                                self.ppustatus |= PpuStatus::SPRITE_OVERFLOW;
+                                break;
+                            }
+
+                            self.sprite_scanline.push([b0, b1, b2, b3]);
+                        }
+                    }
+                }
+
+                // Load sprites
+                if self.cycle == 340 {
+                    self.sprite_px_lo.clear();
+                    self.sprite_px_hi.clear();
+
+                    for i in 0..self.sprite_scanline.len() {
+                        let &[b0, b1, b2, _] = &self.sprite_scanline[i];
+
+                        let attrs = SpriteFlags::from_bits_truncate(b2);
+
+                        let pattern_lo_addr: u16;
+                        if self.ppuctrl.intersects(PpuCtrl::SPRITE_HEIGHT) {
+                            // 8x16
+                            if attrs.intersects(SpriteFlags::FLIP_V) {
+                                if self.scanline.wrapping_sub(b0 as u16) < 8 {
+                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                        | ((((b1 as u16) & 0xFE) + 1) << 4)
+                                        | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                } else {
+                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                        | (((b1 as u16) & 0xFE) << 4)
+                                        | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                }
+                            } else {
+                                if self.scanline.wrapping_sub(b0 as u16) < 8 {
+                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                        | (((b1 as u16) & 0xFE) << 4)
+                                        | ((self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                } else {
+                                    pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
+                                        | ((((b1 as u16) & 0xFE) + 1) << 4)
+                                        | ((self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                }
+                            }
+                        } else {
+                            // 8x8
+
+                            if attrs.intersects(SpriteFlags::FLIP_V) {
+                                pattern_lo_addr =
+                                    ((self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u16) << 12)
+                                        | ((b1 as u16) << 4)
+                                        | (7 - self.scanline.wrapping_sub(b0 as u16));
+                            } else {
+                                pattern_lo_addr =
+                                    ((self.ppuctrl.intersects(PpuCtrl::SPRITE_TILE) as u16) << 12)
+                                        | ((b1 as u16) << 4)
+                                        | self.scanline.wrapping_sub(b0 as u16);
+                            }
+                        }
+
+                        let pattern_hi_addr = pattern_lo_addr + 8;
+
+                        let mut bits_lo = self.read_mem(cart, pattern_lo_addr);
+                        let mut bits_hi = self.read_mem(cart, pattern_hi_addr);
+
+                        if attrs.intersects(SpriteFlags::FLIP_H) {
+                            bits_lo = bits_lo.reverse_bits();
+                            bits_hi = bits_hi.reverse_bits();
+                        }
+
+                        self.sprite_px_lo.push(bits_lo);
+                        self.sprite_px_hi.push(bits_hi);
+                    }
+                }
+
+                let ordinary_bg_fetch = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
+                    1 => {
+                        ppu.load_shifters();
+                        ppu.bg_next_nt = ppu.fetch_nt(cart)
+                    }
+                    3 => ppu.bg_next_at = ppu.fetch_at(cart),
+                    5 => ppu.bg_next_pt_low = ppu.fetch_pt_low(cart),
+                    7 => ppu.bg_next_pt_high = ppu.fetch_pt_high(cart),
+                    _ => {}
+                };
+
+                let bg_garbage_nts = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
+                    1 | 3 => {
+                        ppu.bg_next_nt = ppu.fetch_nt(cart);
+                    }
+                    _ => {}
+                };
+
+                // Fetches
+                match self.cycle {
+                    1..=256 => ordinary_bg_fetch(self, cart, self.cycle),
+                    257..=320 => bg_garbage_nts(self, cart, self.cycle),
+                    321..=336 => ordinary_bg_fetch(self, cart, self.cycle),
+                    337..=340 => bg_garbage_nts(self, cart, self.cycle),
+                    _ => {}
+                }
+
+                // Scroll
+                // y scroll
+                match self.cycle {
+                    256 => self.inc_fine_y(),
+                    280..=304 if self.scanline == 261 => self.transfer_y(),
+                    _ => {}
+                }
+                // x scroll
+                match self.cycle {
+                    8..=256 if self.cycle % 8 == 0 => self.inc_coarse_x(),
+                    257 => self.transfer_coarse_x(),
+                    328 | 336 => self.inc_coarse_x(),
+                    _ => {}
+                }
+
+                // Pixel
+                if self.scanline != 261 && (1..=256).contains(&self.cycle) {
+                    let (bg_px, bg_pal) = {
+                        let bit_mux = 0x8000 >> self.fine_x;
+
+                        let px_low = ((self.bg_shift_pt_low & bit_mux) != 0) as u8;
+                        let px_high = ((self.bg_shift_pt_high & bit_mux) != 0) as u8;
+                        let px = (px_high << 1) | px_low;
+
+                        let at_low = ((self.bg_shift_at_low & bit_mux) != 0) as u8;
+                        let at_high = ((self.bg_shift_at_high & bit_mux) != 0) as u8;
+                        let pal = (at_high << 1) | at_low;
+                        (px, pal)
+                    };
+
+                    let (fg_px, fg_pal, fg_prio) = {
+                        let mut fg_px = 0;
+                        let mut fg_pal = 0;
+                        let mut fg_prio = false;
+
+                        for i in 0..self.sprite_scanline.len() {
+                            if self.sprite_scanline[i][3] == 0 {
+                                let px_lo = (self.sprite_px_lo[i] & 0x80 != 0) as u8;
+                                let px_hi = (self.sprite_px_hi[i] & 0x80 != 0) as u8;
+                                fg_px = (px_hi << 1) | px_lo;
+                                let attrs =
+                                    SpriteFlags::from_bits_truncate(self.sprite_scanline[i][2]);
+                                fg_pal = attrs.intersection(SpriteFlags::PALETTE).bits() + 0x04;
+                                fg_prio = !attrs.intersects(SpriteFlags::PRIO);
+
+                                if fg_px != 0 {
+                                    break;
+                                }
+                            }
+                        }
+
+                        (fg_px, fg_pal, fg_prio)
+                    };
+
+                    let (px, pal) = match (bg_px, fg_px) {
+                        (0, 0) => (0, 0),
+                        (0, _) => (fg_px, fg_pal),
+                        (_, 0) => (bg_px, bg_pal),
+                        (_, _) => {
+                            if fg_prio {
+                                (fg_px, fg_pal)
+                            } else {
+                                (bg_px, bg_pal)
+                            }
+                        }
+                    };
+
+                    self.display.set_pixel(
+                        self.cycle as usize - 1,
+                        self.scanline as usize,
+                        self.get_palette_color(pal, px),
+                    );
+                }
+            }
+
+            // Post-render scanline, idle
+            240 => {}
+            // Vertical blanking lines
+            241..261 => {}
+            // Pre-render scanline
+            _ => unreachable!(),
         }
 
+        // Resets
         match (self.scanline, self.cycle) {
             (241, 1) => {
                 // Start vblank
@@ -319,6 +555,7 @@ impl Ppu {
             (261, 1) => {
                 self.ppustatus -=
                     PpuStatus::VBLANK | PpuStatus::SPRITE_0_HIT | PpuStatus::SPRITE_OVERFLOW;
+                self.sprite_px_lo.clear();
             }
             _ => {}
         }
@@ -339,90 +576,6 @@ impl Ppu {
                     self.cycle = 1
                 };
             }
-        }
-    }
-
-    fn render_bg(&mut self, cart: &mut Cart) {
-        let cycle = self.cycle;
-        let scanline = self.scanline;
-
-        match scanline {
-            // Visible scanlines and pre-render scanline
-            0..240 | 261 => {
-                // Update shifter registers
-                match cycle {
-                    2..258 | 321..338 => self.update_shifters(),
-                    _ => {}
-                }
-
-                let ordinary_fetch = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
-                    1 => {
-                        ppu.load_shifters();
-                        ppu.bg_next_nt = ppu.fetch_nt(cart)
-                    }
-                    3 => ppu.bg_next_at = ppu.fetch_at(cart),
-                    5 => ppu.bg_next_pt_low = ppu.fetch_pt_low(cart),
-                    7 => ppu.bg_next_pt_high = ppu.fetch_pt_high(cart),
-                    _ => {}
-                };
-
-                let garbage_nts = |ppu: &mut Ppu, cart, cycle| match cycle % 8 {
-                    1 | 3 => {
-                        ppu.bg_next_nt = ppu.fetch_nt(cart);
-                    }
-                    _ => {}
-                };
-
-                // Fetches
-                match cycle {
-                    1..=256 => ordinary_fetch(self, cart, cycle),
-                    257..=320 => garbage_nts(self, cart, cycle),
-                    321..=336 => ordinary_fetch(self, cart, cycle),
-                    337..=340 => garbage_nts(self, cart, cycle),
-                    _ => {}
-                }
-
-                // Scroll
-                // y scroll
-                match cycle {
-                    256 => self.inc_fine_y(),
-                    280..=304 if self.scanline == 261 => self.transfer_y(),
-                    _ => {}
-                }
-                // x scroll
-                match cycle {
-                    8..=256 if cycle % 8 == 0 => self.inc_coarse_x(),
-                    257 => self.transfer_coarse_x(),
-                    328 | 336 => self.inc_coarse_x(),
-                    _ => {}
-                }
-
-                // Draw background pixel
-                if scanline != 261 && (1..=256).contains(&cycle) {
-                    let bit_mux = 0x8000 >> self.fine_x;
-
-                    let px_low = ((self.bg_shift_pt_low & bit_mux) != 0) as u8;
-                    let px_high = ((self.bg_shift_pt_high & bit_mux) != 0) as u8;
-                    let px = (px_high << 1) | px_low;
-
-                    let at_low = ((self.bg_shift_at_low & bit_mux) != 0) as u8;
-                    let at_high = ((self.bg_shift_at_high & bit_mux) != 0) as u8;
-                    let at = (at_high << 1) | at_low;
-
-                    self.display.set_pixel(
-                        self.cycle as usize - 1,
-                        self.scanline as usize,
-                        self.get_palette_color(at, px),
-                    );
-                }
-            }
-
-            // Post-render scanline, idle
-            240 => {}
-            // Vertical blanking lines
-            241..261 => {}
-            // Pre-render scanline
-            _ => unreachable!(),
         }
     }
 
@@ -481,11 +634,30 @@ impl Ppu {
             (self.bg_shift_at_high & 0xff00) | if self.bg_next_at & 2 != 0 { 0xff } else { 0x0 };
     }
 
-    fn update_shifters(&mut self) {
+    fn update_bg_shifters(&mut self) {
+        if !self.ppumask.intersects(PpuMask::BACKGROUND_ENABLE) {
+            return;
+        }
+
         self.bg_shift_pt_low <<= 1;
         self.bg_shift_pt_high <<= 1;
         self.bg_shift_at_low <<= 1;
         self.bg_shift_at_high <<= 1;
+    }
+
+    fn update_fg_shifters(&mut self) {
+        if !self.ppumask.intersects(PpuMask::SPRITE_ENABLE) {
+            return;
+        }
+
+        for i in 0..self.sprite_scanline.len() {
+            if self.sprite_scanline[i][3] > 0 {
+                self.sprite_scanline[i][3] -= 1;
+            } else {
+                self.sprite_px_lo[i] <<= 1;
+                self.sprite_px_hi[i] <<= 1;
+            }
+        }
     }
 
     fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
@@ -530,6 +702,13 @@ impl Ppu {
     }
 
     fn inc_fine_y(&mut self) {
+        if !self
+            .ppumask
+            .intersects(PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE)
+        {
+            return;
+        }
+
         if (self.v & 0x7000) != 0x7000 {
             self.v += 0x1000;
         } else {
@@ -548,6 +727,13 @@ impl Ppu {
     }
 
     fn inc_coarse_x(&mut self) {
+        if !self
+            .ppumask
+            .intersects(PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE)
+        {
+            return;
+        }
+
         if (self.v & 0x001F) == 31 {
             self.v &= !0x0001F;
             self.v ^= 0x0400;
@@ -591,11 +777,25 @@ impl Ppu {
     }
 
     fn transfer_coarse_x(&mut self) {
+        if !self
+            .ppumask
+            .intersects(PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE)
+        {
+            return;
+        }
+
         self.v &= !(0x41f);
         self.v |= self.t & (0x41f);
     }
 
     fn transfer_y(&mut self) {
+        if !self
+            .ppumask
+            .intersects(PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE)
+        {
+            return;
+        }
+
         self.v &= 0x41f;
         self.v |= self.t & !(0x41f);
     }
