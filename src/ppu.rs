@@ -635,7 +635,13 @@ impl Ppu {
             // TODO: Mapped by cartridge
             0x3000..=0x3EFF => 0,
             // Palette ram indexes, mirrored every 0x20 values
-            0x3F00..=0x3FFF => self.palette[(addr % 0x20) as usize],
+            0x3F00..=0x3FFF => {
+                if addr % 0x10 == 0 {
+                    self.palette[0]
+                } else {
+                    self.palette[(addr % 0x20) as usize]
+                }
+            }
 
             _ => unreachable!(),
         }
@@ -655,7 +661,13 @@ impl Ppu {
             // TODO: Mapped by cartridge
             0x3000..=0x3EFF => {}
             // Palette ram indexes, mirrored every 0x20 values
-            0x3F00..=0x3FFF => self.palette[(addr % 0x20) as usize] = v,
+            0x3F00..=0x3FFF => {
+                if addr % 0x10 == 0 {
+                    self.palette[0] = v;
+                } else {
+                    self.palette[(addr % 0x20) as usize] = v;
+                }
+            }
 
             _ => {
                 unreachable!()
