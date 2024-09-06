@@ -21,7 +21,7 @@ impl Nemu {
         let disp = self.emulator.ppu.display();
 
         let mut buf = Vec::new();
-        buf.resize(ppu::Display::WIDTH * ppu::Display::HEIGHT * 4, 0x44);
+        buf.resize(ppu::Display::WIDTH * ppu::Display::HEIGHT * 4, 0xff);
 
         for i in 0..ppu::Display::WIDTH * ppu::Display::HEIGHT {
             buf[i * 4 + 0] = disp.pixels[i * 3];
