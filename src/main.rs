@@ -47,7 +47,8 @@ struct NemuApp {
 
     selected_palette: u8,
 
-    last_frame: std::time::Instant,
+    unused_time: f64,
+    prev_time: Option<std::time::Instant>,
 }
 
 impl NemuApp {
@@ -91,7 +92,8 @@ impl NemuApp {
 
             selected_palette: 0,
 
-            last_frame: std::time::Instant::now(),
+            unused_time: 0.,
+            prev_time: None,
         }
     }
 
@@ -118,12 +120,19 @@ impl NemuApp {
 impl eframe::App for NemuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if let Some(emu) = self.emulator.as_mut() {
-            if !self.paused
-                && std::time::Instant::now().duration_since(self.last_frame)
-                    > std::time::Duration::from_millis(1000 / 60)
-            {
-                emu.step_frame();
-                self.last_frame = std::time::Instant::now();
+            if !self.paused {
+                let now = std::time::Instant::now();
+
+                if let Some(prev_time) = self.prev_time {
+                    self.unused_time += now.duration_since(prev_time).as_secs_f64();
+                }
+
+                self.prev_time = Some(now);
+
+                while self.unused_time >= 1. / 60. {
+                    self.unused_time -= 1. / 60.;
+                    emu.step_frame();
+                }
             }
 
             let frame = emu.display();
@@ -168,6 +177,7 @@ impl eframe::App for NemuApp {
                                     ),
                                 ));
                                 self.paused = true;
+                                self.prev_time = None;
                             }
                         };
                     });
@@ -178,6 +188,9 @@ impl eframe::App for NemuApp {
                             .clicked()
                         {
                             self.paused = !self.paused;
+                            if self.paused {
+                                self.prev_time = None;
+                            }
                         }
                     });
 
@@ -228,6 +241,9 @@ impl eframe::App for NemuApp {
                 } => match key {
                     egui::Key::P => {
                         self.paused ^= true;
+                        if self.paused {
+                            self.prev_time = None;
+                        }
                     }
                     egui::Key::S => {
                         if let Some(emu) = self.emulator.as_mut() {

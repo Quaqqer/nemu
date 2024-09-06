@@ -109,6 +109,8 @@ pub struct Ppu {
     pub oam: [u8; 0x100],
     odd: bool,
 
+    ppudata_read: u8,
+
     sprite_scanline: Vec<[u8; 4]>,
     sprite_0_in_scanline: bool,
     sprite_px_lo: Vec<u8>,
@@ -146,6 +148,8 @@ impl Ppu {
             palette: [0x00; 32],
             oam: [0x00; 256],
             odd: false,
+
+            ppudata_read: 0,
 
             sprite_scanline: Vec::new(),
             sprite_0_in_scanline: false,
@@ -224,9 +228,10 @@ impl Ppu {
                 // Data
                 7 => {
                     // TODO: Some stuff should be done different here apparently
-                    let v = self.read_mem(cart, self.v);
+                    let read = self.ppudata_read;
+                    self.ppudata_read = self.read_mem(cart, self.v);
                     self.v = self.v.wrapping_add(self.ppudata_increase());
-                    v
+                    read
                 }
                 _ => unreachable!(),
             }
