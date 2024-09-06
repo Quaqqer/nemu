@@ -9,17 +9,13 @@ successfully, and at least the first levels in Super Mario Bros.
 ## Features
 
 - CPU emulation
-- PPU emulation
+- PPU emulation (Picture Processing Unit)
+- Keyboard controls
 - Debugging
   - CPU info viewer
   - PPU info viewer
   - Pattern table viewer
   - Nametable viewer
-
-## Missing features
-
-- Sprite rendering
-- Controller inputs
 
 ## Mappers
 
