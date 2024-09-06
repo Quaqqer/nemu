@@ -1,5 +1,3 @@
-mod utils;
-
 use nemu_emulator::{cart::Cart, controller::NesController, emulator::Emulator, ppu};
 use wasm_bindgen::prelude::*;
 
@@ -23,18 +21,18 @@ impl Nemu {
         let disp = self.emulator.ppu.display();
 
         let mut buf = Vec::new();
-        buf.resize(ppu::Display::WIDTH * ppu::Display::HEIGHT * 4, 0);
+        buf.resize(ppu::Display::WIDTH * ppu::Display::HEIGHT * 4, 0x44);
 
         for i in 0..ppu::Display::WIDTH * ppu::Display::HEIGHT {
-            buf[i * 4 + 1] = disp.pixels[i * 3];
-            buf[i * 4 + 2] = disp.pixels[i * 3 + 1];
-            buf[i * 4 + 3] = disp.pixels[i * 3 + 2];
+            buf[i * 4 + 0] = disp.pixels[i * 3];
+            buf[i * 4 + 1] = disp.pixels[i * 3 + 1];
+            buf[i * 4 + 2] = disp.pixels[i * 3 + 2];
         }
 
         buf
     }
 
-    pub fn update_controller(&mut self, controller: Controller) {
+    pub fn update_controller(&mut self, controller: &Controller) {
         let mut nes_controller = NesController::empty();
 
         if controller.dpad_n {
@@ -86,4 +84,26 @@ struct Controller {
 
     pub a: bool,
     pub b: bool,
+}
+
+#[wasm_bindgen]
+impl Controller {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> Controller {
+        Controller {
+            dpad_n: false,
+            dpad_s: false,
+            dpad_w: false,
+            dpad_e: false,
+            start: false,
+            select: false,
+            a: false,
+            b: false,
+        }
+    }
+}
+
+#[wasm_bindgen]
+pub fn set_panic_hook() {
+    console_error_panic_hook::set_once();
 }
