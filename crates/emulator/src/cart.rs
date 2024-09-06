@@ -23,8 +23,7 @@ pub enum TvSystem {
 }
 
 impl Cart {
-    pub fn read_ines1_0(path: &str) -> Self {
-        let bin = std::fs::read(path).unwrap();
+    pub fn read_ines1_0(bin: &[u8]) -> Option<Self> {
         assert!(bin[0..4] == [0x4E, 0x45, 0x53, 0x1A]);
         let prg_pages: u8 = bin[4];
         let chr_size: usize = bin[5] as usize * 8192;
@@ -45,7 +44,7 @@ impl Cart {
         let flags_7 = bin[7];
 
         let mapper_n = (flags_6 >> 4) | (flags_7 & 0xf0);
-        let mapper = Mapper::from_number(mapper_n);
+        let mapper = Mapper::from_number(mapper_n)?;
 
         let flags_8 = bin[8];
         let prg_ram_size = flags_8.max(1) as usize * 8192;
@@ -76,14 +75,14 @@ impl Cart {
         #[allow(unused_assignments)]
         let _ = ptr += chr_size;
 
-        Self {
+        Some(Self {
             prg_pages,
             prg,
             chr,
             mapper,
             prg_ram,
             mirroring,
-        }
+        })
     }
 
     pub fn read8(&self, addr: u16) -> u8 {
@@ -263,10 +262,10 @@ pub enum Mapper {
 }
 
 impl Mapper {
-    fn from_number(n: u8) -> Self {
-        match n {
+    fn from_number(n: u8) -> Option<Self> {
+        Some(match n {
             0 => Self::NES1_0,
-            _ => todo!("Mapper number {} is not implemented yet", n),
-        }
+            _ => return None,
+        })
     }
 }
