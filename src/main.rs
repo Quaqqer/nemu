@@ -30,6 +30,7 @@ fn main() {
 struct NemuApp {
     // Emulator stuff
     emulator: Option<nemu::emulator::Emulator>,
+    save_state: Option<nemu::emulator::Emulator>,
     paused: bool,
     tex: TextureHandle,
     nt1: TextureHandle,
@@ -76,6 +77,7 @@ impl NemuApp {
 
         Self {
             emulator: None,
+            save_state: None,
             paused: false,
             tex,
             pt1,
@@ -246,18 +248,13 @@ impl eframe::App for NemuApp {
                         }
                     }
                     egui::Key::S => {
-                        if let Some(emu) = self.emulator.as_mut() {
-                            emu.step_scanline();
+                        if let Some(emu) = &self.emulator {
+                            self.save_state = Some(emu.clone());
                         }
                     }
-                    egui::Key::N => {
-                        if let Some(emu) = self.emulator.as_mut() {
-                            emu.step();
-                        }
-                    }
-                    egui::Key::F => {
-                        if let Some(emu) = self.emulator.as_mut() {
-                            emu.step_frame();
+                    egui::Key::L => {
+                        if let Some(state) = &self.save_state {
+                            self.emulator = Some(state.clone());
                         }
                     }
                     egui::Key::M => {

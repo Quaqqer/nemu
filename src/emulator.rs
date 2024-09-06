@@ -6,6 +6,7 @@ use crate::{
     ppu::{Display, Ppu, PpuCtrl},
 };
 
+#[derive(Clone)]
 pub struct Emulator {
     pub cpu: Cpu,
     pub apu: Apu,

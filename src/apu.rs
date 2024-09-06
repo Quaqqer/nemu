@@ -1,3 +1,4 @@
+#[derive(Clone)]
 pub struct Apu {
     registers: [u8; 0x18],
 }

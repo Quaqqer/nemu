@@ -1,5 +1,6 @@
 use crate::ppu::Ppu;
 
+#[derive(Clone)]
 pub struct Cart {
     pub prg_pages: u8,
     pub prg: Vec<u8>,
@@ -9,6 +10,7 @@ pub struct Cart {
     pub mirroring: Mirroring,
 }
 
+#[derive(Clone)]
 pub enum Mirroring {
     Horizontal,
     Vertical,

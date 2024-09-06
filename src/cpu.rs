@@ -28,6 +28,7 @@ impl std::fmt::Display for P {
     }
 }
 
+#[derive(Clone)]
 pub struct Cpu {
     pub a: u8,
     pub x: u8,

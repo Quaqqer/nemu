@@ -87,6 +87,7 @@ impl std::fmt::Display for PpuStatus {
     }
 }
 
+#[derive(Clone)]
 pub struct Ppu {
     // Registers
     pub ppuctrl: PpuCtrl,
@@ -860,6 +861,7 @@ impl Ppu {
     }
 }
 
+#[derive(Clone)]
 pub struct Display {
     pub pixels: [u8; Self::WIDTH * Self::HEIGHT * 3],
 }
