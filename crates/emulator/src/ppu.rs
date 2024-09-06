@@ -925,7 +925,8 @@ mod tests {
     fn ppu_scroll_registers() {
         // Test taken from https://www.nesdev.org/wiki/PPU_scrolling#Summary
         let mut ppu = Ppu::new();
-        let cart = &mut Cart::read_ines1_0("test_roms/nestest/nestest.nes");
+        let cart =
+            &mut Cart::read_ines1_0(include_bytes!("../test_roms/nestest/nestest.nes")).unwrap();
 
         // $2000 write
         ppu.cpu_write_register(cart, 0x2000, 0b00000000);

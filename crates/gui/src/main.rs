@@ -1,6 +1,8 @@
 #![allow(clippy::new_without_default, clippy::single_match, clippy::identity_op)]
 #![feature(let_chains)]
 
+use std::io::Read;
+
 use eframe::egui::{
     self, load::SizedTexture, Color32, ColorImage, Context, FontDefinitions, TextureHandle,
     TextureOptions, Ui, Vec2,
@@ -158,10 +160,12 @@ impl eframe::App for NemuApp {
                                 .pick_file();
 
                             if let Some(path) = path {
+                                let mut f = std::fs::File::open(path).unwrap();
+                                let mut bytes = Vec::new();
+                                f.read_to_end(&mut bytes).unwrap();
                                 self.emulator = Some(nemu_emulator::emulator::Emulator::new(
-                                    nemu_emulator::cart::Cart::read_ines1_0(
-                                        path.to_str().expect("Should be convertible to str"),
-                                    ),
+                                    nemu_emulator::cart::Cart::read_ines1_0(&bytes)
+                                        .expect("Failed to read cart"),
                                 ));
                                 self.paused = false;
                             }
@@ -173,11 +177,14 @@ impl eframe::App for NemuApp {
                                 .pick_file();
 
                             if let Some(path) = path {
+                                let mut f = std::fs::File::open(path).unwrap();
+                                let mut bytes = Vec::new();
+                                f.read_to_end(&mut bytes).unwrap();
                                 self.emulator = Some(nemu_emulator::emulator::Emulator::new(
-                                    nemu_emulator::cart::Cart::read_ines1_0(
-                                        path.to_str().expect("Should be convertible to str"),
-                                    ),
+                                    nemu_emulator::cart::Cart::read_ines1_0(&bytes)
+                                        .expect("Failed to read cart"),
                                 ));
+
                                 self.paused = true;
                                 self.prev_time = None;
                             }

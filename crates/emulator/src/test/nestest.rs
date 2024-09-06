@@ -46,13 +46,13 @@ mod tests {
 
     #[test]
     fn run_nestest() {
-        let log_lines = std::fs::read_to_string("test_roms/nestest/nestest.log")
-            .unwrap()
+        let log_lines = include_str!("../../test_roms/nestest/nestest.log")
             .lines()
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
 
-        let cart = &mut Cart::read_ines1_0("test_roms/nestest/nestest.nes");
+        let cart =
+            &mut Cart::read_ines1_0(include_bytes!("../../test_roms/nestest/nestest.nes")).unwrap();
         let mut cpu = Cpu::new();
         let cpu_bus = &mut CpuBus {
             apu: &mut Apu::new(),
