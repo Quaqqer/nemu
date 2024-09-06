@@ -3,6 +3,10 @@
 Nemu is my WIP nes emulator. Currently it can run Donkey Kong quite
 successfully, and at least the first levels in Super Mario Bros.
 
+The emulator is able to run in the browser over at
+[Quaqqer.com/projects/nemu](https://quaqqer.com/projects/nemu), although the
+debugging features are missing there.
+
 ![A video of Nemu running Donkey Kong](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/dk.gif)
 ![A screenshot of Nemu running Donkey Kong with debugging utilities](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/screenshot.png)
 
@@ -19,7 +23,13 @@ successfully, and at least the first levels in Super Mario Bros.
 
 ## Mappers
 
-Currently only mapper 0 is implemented, since Nemu is still in its infant stages.
+Currently only [games running on mapper
+0](https://nesdir.github.io/mapper0.html) are supported. Different game carts
+have different internal wiring which must be emulated, at the moment I have
+only implemented one type of cart. Some games that should run are Donkey Kong,
+Super Mario Bros 1, and Ice Climber.
+
+- [x] Mapper 0
 
 ## Acknowledgements
 
