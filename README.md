@@ -21,6 +21,10 @@ debugging features are missing there.
   - Pattern table viewer
   - Nametable viewer
 
+## Missing features
+
+- Audio emulation
+
 ## Mappers
 
 Currently only [games running on mapper
