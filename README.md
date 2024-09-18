@@ -7,8 +7,8 @@ The emulator is able to run in the browser over at
 [Quaqqer.com/projects/nemu](https://quaqqer.com/projects/nemu), although the
 debugging features are missing there.
 
-![A video of Nemu running Donkey Kong](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/dk.gif)
-![A screenshot of Nemu running Donkey Kong with debugging utilities](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/screenshot.png)
+![A video of Nemu running Donkey Kong](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/github/dk.gif)
+![A screenshot of Nemu running Donkey Kong with debugging utilities](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/github/screenshot.png)
 
 ## Features
 
