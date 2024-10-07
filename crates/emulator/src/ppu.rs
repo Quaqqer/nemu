@@ -1,5 +1,6 @@
-use crate::cart::Cart;
 use bitflags::bitflags;
+
+use crate::carts::Cart;
 
 #[derive(Clone, Copy)]
 pub struct PpuCtrl(u8);
@@ -628,15 +629,35 @@ impl Ppu {
     }
 
     fn read_mem(&mut self, cart: &mut Cart, addr: u16) -> u8 {
+        macro_rules! read_nametable {
+            ($n:expr, $addr:expr) => {{
+                match cart.mirroring {
+                    crate::carts::Mirroring::Horizontal => match $n {
+                        0 => self.vram[$addr as usize],
+                        1 => self.vram[$addr as usize],
+                        2 => self.vram[0x400 + $addr as usize],
+                        3 => self.vram[0x400 + $addr as usize],
+                        _ => unreachable!(),
+                    },
+                    crate::carts::Mirroring::Vertical => match $n {
+                        0 => self.vram[$addr as usize],
+                        1 => self.vram[0x400 + $addr as usize],
+                        2 => self.vram[$addr as usize],
+                        3 => self.vram[0x400 + $addr as usize],
+                        _ => unreachable!(),
+                    },
+                }
+            }};
+        }
+
         match addr % 0x4000 {
             // Pattern tables
-            0x0000..=0x0FFF => cart.read_pattern_table(self, 0, addr % 0x1000),
-            0x1000..=0x1FFF => cart.read_pattern_table(self, 1, addr % 0x1000),
+            0x0000..0x2000 => cart.ppu_read(addr),
             // Name tables
-            0x2000..=0x23FF => cart.read_nametable(self, 0, (addr - 0x2000) % 0x400),
-            0x2400..=0x27FF => cart.read_nametable(self, 1, (addr - 0x2400) % 0x400),
-            0x2800..=0x2BFF => cart.read_nametable(self, 2, (addr - 0x2800) % 0x400),
-            0x2C00..=0x2FFF => cart.read_nametable(self, 3, (addr - 0x2c00) % 0x400),
+            0x2000..=0x23FF => read_nametable!(0, addr - 0x2000),
+            0x2400..=0x27FF => read_nametable!(1, addr - 0x2400),
+            0x2800..=0x2BFF => read_nametable!(2, addr - 0x2800),
+            0x2C00..=0x2FFF => read_nametable!(3, addr - 0x2C00),
             // Unused address, do nothing for now
             // TODO: Mapped by cartridge
             0x3000..=0x3EFF => 0,
@@ -654,15 +675,36 @@ impl Ppu {
     }
 
     fn write_mem(&mut self, cart: &mut Cart, addr: u16, v: u8) {
+        macro_rules! write_nametable {
+            ($n:expr, $addr:expr, $v: expr) => {{
+                let p = match cart.mirroring {
+                    crate::carts::Mirroring::Horizontal => match $n {
+                        0 => &mut self.vram[$addr as usize],
+                        1 => &mut self.vram[$addr as usize],
+                        2 => &mut self.vram[0x400 + $addr as usize],
+                        3 => &mut self.vram[0x400 + $addr as usize],
+                        _ => unreachable!(),
+                    },
+                    crate::carts::Mirroring::Vertical => match $n {
+                        0 => &mut self.vram[$addr as usize],
+                        1 => &mut self.vram[0x400 + $addr as usize],
+                        2 => &mut self.vram[$addr as usize],
+                        3 => &mut self.vram[0x400 + $addr as usize],
+                        _ => unreachable!(),
+                    },
+                };
+                *p = v;
+            }};
+        }
+
         match addr % 0x4000 {
             // Pattern tables
-            0x0000..=0x0FFF => cart.write_pattern_table(self, 0, addr % 0x1000, v),
-            0x1000..=0x1FFF => cart.write_pattern_table(self, 1, addr % 0x1000, v),
+            0x0000..0x2000 => cart.ppu_write(addr, v),
             // Name tables
-            0x2000..=0x23FF => cart.write_nametable(self, 0, (addr - 0x2000) % 0x400, v),
-            0x2400..=0x27FF => cart.write_nametable(self, 1, (addr - 0x2400) % 0x400, v),
-            0x2800..=0x2BFF => cart.write_nametable(self, 2, (addr - 0x2800) % 0x400, v),
-            0x2C00..=0x2FFF => cart.write_nametable(self, 3, (addr - 0x2c00) % 0x400, v),
+            0x2000..=0x23FF => write_nametable!(0, addr - 0x2000, v),
+            0x2400..=0x27FF => write_nametable!(1, addr - 0x2400, v),
+            0x2800..=0x2BFF => write_nametable!(2, addr - 0x2800, v),
+            0x2C00..=0x2FFF => write_nametable!(3, addr - 0x2C00, v),
             // Unused address, do nothing for now
             // TODO: Mapped by cartridge
             0x3000..=0x3EFF => {}
@@ -917,7 +959,7 @@ pub const PALETTE: [u8; 3 * 64] = {
 
 #[cfg(test)]
 mod tests {
-    use crate::cart::Cart;
+    use crate::carts::read_rom;
 
     use super::Ppu;
 
@@ -925,8 +967,7 @@ mod tests {
     fn ppu_scroll_registers() {
         // Test taken from https://www.nesdev.org/wiki/PPU_scrolling#Summary
         let mut ppu = Ppu::new();
-        let cart =
-            &mut Cart::read_ines1_0(include_bytes!("../test_roms/nestest/nestest.nes")).unwrap();
+        let cart = &mut read_rom(include_bytes!("../test_roms/nestest/nestest.nes")).unwrap();
 
         // $2000 write
         ppu.cpu_write_register(cart, 0x2000, 0b00000000);

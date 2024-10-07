@@ -2,7 +2,7 @@
 #![feature(let_chains)]
 
 pub mod apu;
-pub mod cart;
+pub mod carts;
 pub mod controller;
 pub mod cpu;
 pub mod emulator;

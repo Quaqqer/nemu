@@ -1,5 +1,5 @@
 use crate::apu::Apu;
-use crate::cart::Cart;
+use crate::carts::Cart;
 use crate::controller::NesController;
 use crate::op::{AddrMode, Op, OPCODE_MATRIX};
 use crate::ppu::Ppu;
@@ -71,7 +71,7 @@ impl<'a> CpuMemory for CpuBus<'a> {
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
-            0x4020..=0xFFFF => self.cart.read8(addr),
+            0x4020..=0xFFFF => self.cart.cpu_read(addr),
         }
     }
 
@@ -83,7 +83,7 @@ impl<'a> CpuMemory for CpuBus<'a> {
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
-            0x4020..=0xFFFF => Some(self.cart.read8(addr)),
+            0x4020..=0xFFFF => Some(self.cart.cpu_inspect(addr)),
         }
     }
 
@@ -119,7 +119,7 @@ impl<'a> CpuMemory for CpuBus<'a> {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }
             0x4020..=0xFFFF => {
-                self.cart.write8(addr - 0x4020, val);
+                self.cart.cpu_write(addr, val);
             }
         }
     }

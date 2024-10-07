@@ -1,6 +1,6 @@
 use crate::{
     apu::Apu,
-    cart::Cart,
+    carts::Cart,
     controller::NesController,
     cpu::{Cpu, CpuBus},
     ppu::{Display, Ppu, PpuCtrl},

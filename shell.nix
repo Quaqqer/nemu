@@ -20,6 +20,7 @@ pkgs.mkShell {
     pkg-config
     gtk3
     wrapGAppsHook
+    wasm-pack
   ];
 
   LD_LIBRARY_PATH = ld_library_path;
