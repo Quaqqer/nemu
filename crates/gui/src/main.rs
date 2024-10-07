@@ -10,7 +10,7 @@ use eframe::egui::{
 use egui::Id;
 use nemu_emulator::{
     controller::NesController,
-    cpu::{Cpu, CpuBus},
+    cpu::{Cpu, CpuBus, CpuMemory},
     emulator::Emulator,
     ppu::{PpuCtrl, PALETTE},
 };
@@ -378,10 +378,12 @@ impl NemuApp {
                     apu,
                     ppu,
                     cart,
-                    controllers, controller_shifters
+                    controllers,
+                    controller_shifters,
+                    ram,
                 } = emu;
 
-                let cpu_bus = &mut CpuBus { apu, ppu, cart, controllers, controller_shifters };
+                let cpu_bus = &mut CpuBus { apu, ppu, cart, controllers, controller_shifters, ram };
 
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
                     ui.label("PC");
@@ -411,7 +413,7 @@ impl NemuApp {
                     ui.label("OP");
                     ui.label(format!(
                         "{:#02x}",
-                        cpu.inspect_mem8(cpu_bus, cpu.pc).unwrap()
+                        cpu_bus.inspect(cpu, cpu.pc).unwrap()
                     ));
                     ui.end_row();
                 });
@@ -421,11 +423,11 @@ impl NemuApp {
                             let history_i = cpu.history_i.wrapping_sub(i) % Cpu::HISTORY_LEN;
                             let offset = cpu.history[history_i];
 
-                            if let Some(opcode) = cpu.inspect_mem8(cpu_bus, offset) {
+                            if let Some(opcode) = cpu_bus.inspect(cpu, offset) {
                                 let (op, addr_mode, _, _) = &nemu_emulator::op::OPCODE_MATRIX[opcode as usize];
 
                                 macro_rules! read_8(($base:expr, $offset:expr) => {
-                                    cpu.inspect_mem8(cpu_bus, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
+                                    cpu_bus.inspect(cpu, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
                                 });
 
                                 macro_rules! read_16(($base:expr, $offset:expr) => {

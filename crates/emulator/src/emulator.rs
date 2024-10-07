@@ -14,6 +14,7 @@ pub struct Emulator {
     pub cart: Cart,
     pub controllers: [NesController; 2],
     pub controller_shifters: [u8; 2],
+    pub ram: [u8; 0x800],
 }
 
 impl Emulator {
@@ -44,6 +45,7 @@ impl Emulator {
             cart,
             controllers,
             controller_shifters: controller_states,
+            ram,
         } = self;
 
         let did_nmi = ppu.nmi;
@@ -54,6 +56,7 @@ impl Emulator {
                 cart,
                 controllers,
                 controller_shifters: controller_states,
+                ram,
             });
         }
         ppu.nmi = false;
@@ -64,6 +67,7 @@ impl Emulator {
             cart,
             controllers,
             controller_shifters: controller_states,
+            ram,
         });
 
         for _ in 0..cpu_cycles * 3 {
@@ -84,6 +88,7 @@ impl Emulator {
             cart,
             controllers: [NesController::empty(); 2],
             controller_shifters: [0x0; 2],
+            ram: [0x00; 0x800],
         };
 
         let Emulator {
@@ -93,6 +98,7 @@ impl Emulator {
             cart,
             controllers,
             controller_shifters: controller_states,
+            ram,
         } = &mut emu;
 
         cpu.init(&mut CpuBus {
@@ -101,6 +107,7 @@ impl Emulator {
             cart,
             controllers,
             controller_shifters: controller_states,
+            ram,
         });
 
         emu

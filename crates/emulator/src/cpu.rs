@@ -39,18 +39,90 @@ pub struct Cpu {
 
     pub cyc: u64,
 
-    pub ram: [u8; 0x800],
-
     pub history: [u16; Self::HISTORY_LEN],
     pub history_i: usize,
 }
 
 pub struct CpuBus<'a> {
+    pub ram: &'a mut [u8; 0x800],
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
     pub cart: &'a mut Cart,
     pub controllers: &'a [NesController; 2],
     pub controller_shifters: &'a mut [u8; 2],
+}
+
+impl<'a> CpuMemory for CpuBus<'a> {
+    fn read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
+        match addr {
+            0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
+            0x2000..=0x3FFF => self.ppu.cpu_read_register(self.cart, addr),
+            0x4000..=0x4015 => self.apu.read_register(addr),
+            0x4016 => {
+                let v = (self.controller_shifters[0] & 0x80 != 0) as u8;
+                self.controller_shifters[0] <<= 1;
+                v
+            }
+            0x4017 => {
+                let v = (self.controller_shifters[0] & 0x80 != 0) as u8;
+                self.controller_shifters[0] <<= 1;
+                v
+            }
+            0x4018..=0x401F => {
+                unimplemented!("APU and I/O functionality that is normally disabled.")
+            }
+            0x4020..=0xFFFF => self.cart.read8(addr),
+        }
+    }
+
+    fn inspect(&self, _cpu: &Cpu, addr: u16) -> Option<u8> {
+        match addr {
+            0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
+            0x2000..=0x3FFF => None,
+            0x4000..=0x4017 => None,
+            0x4018..=0x401F => {
+                unimplemented!("APU and I/O functionality that is normally disabled.")
+            }
+            0x4020..=0xFFFF => Some(self.cart.read8(addr)),
+        }
+    }
+
+    fn write(&mut self, cpu: &mut Cpu, addr: u16, val: u8) {
+        match addr {
+            0x0000..=0x1FFF => {
+                self.ram[addr as usize % 0x800] = val;
+            }
+            0x2000..=0x3FFF => {
+                self.ppu.cpu_write_register(self.cart, addr, val);
+            }
+            0x4014 => {
+                // Perform OAM DMA
+
+                // Either 513 or 514 depending if on a put or write cycle, hard to implement
+                cpu.cyc += 514;
+                let mut mem_i = (val as u16) << 8;
+                for i in 0..256 {
+                    self.ppu.oam[i] = self.read(cpu, mem_i);
+                    mem_i += 1;
+                }
+            }
+            0x4000..=0x4015 => {
+                self.apu.write_register(addr, val);
+            }
+            0x4016 => {
+                self.controller_shifters[0] = self.controllers[0].bits();
+            }
+            0x4017 => {
+                self.controller_shifters[0] = self.controllers[0].bits();
+            }
+            0x4018..=0x401F => {
+                unimplemented!("APU and I/O functionality that is normally disabled.")
+            }
+            0x4020..=0xFFFF => {
+                self.cart.write8(addr - 0x4020, val);
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for Cpu {
@@ -67,6 +139,14 @@ impl std::fmt::Debug for Cpu {
     }
 }
 
+pub trait CpuMemory {
+    fn read(&mut self, cpu: &mut Cpu, addr: u16) -> u8;
+
+    fn inspect(&self, cpu: &Cpu, addr: u16) -> Option<u8>;
+
+    fn write(&mut self, cpu: &mut Cpu, addr: u16, v: u8);
+}
+
 #[derive(Debug, Clone, Copy)]
 enum Addr {
     A,
@@ -79,49 +159,15 @@ enum Addr {
 impl Cpu {
     pub const HISTORY_LEN: usize = 64;
 
-    fn read_mem8(&mut self, bus: &mut CpuBus, addr: u16) -> u8 {
-        match addr {
-            0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
-            0x2000..=0x3FFF => bus.ppu.cpu_read_register(bus.cart, addr),
-            0x4000..=0x4015 => bus.apu.read_register(addr),
-            0x4016 => {
-                let v = (bus.controller_shifters[0] & 0x80 != 0) as u8;
-                bus.controller_shifters[0] <<= 1;
-                v
-            }
-            0x4017 => {
-                let v = (bus.controller_shifters[0] & 0x80 != 0) as u8;
-                bus.controller_shifters[0] <<= 1;
-                v
-            }
-            0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
-            }
-            0x4020..=0xFFFF => bus.cart.read8(addr),
-        }
-    }
-
-    pub fn inspect_mem8(&self, bus: &CpuBus, addr: u16) -> Option<u8> {
-        match addr {
-            0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
-            0x2000..=0x3FFF => None,
-            0x4000..=0x4017 => None,
-            0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
-            }
-            0x4020..=0xFFFF => Some(bus.cart.read8(addr)),
-        }
-    }
-
-    fn read_mem16(&mut self, bus: &mut CpuBus, addr: u16) -> u16 {
-        let l = self.read_mem8(bus, addr);
-        let r = self.read_mem8(bus, addr.wrapping_add(1));
+    fn read_mem16<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: u16) -> u16 {
+        let l = mem.read(self, addr);
+        let r = mem.read(self, addr.wrapping_add(1));
         u16::from_le_bytes([l, r])
     }
 
-    pub fn inspect_mem16(&self, bus: &CpuBus, addr: u16) -> Option<u16> {
-        let l = self.inspect_mem8(bus, addr);
-        let r = self.inspect_mem8(bus, addr.wrapping_add(1));
+    pub fn inspect_mem16<Mem: CpuMemory>(&self, mem: &Mem, addr: u16) -> Option<u16> {
+        let l = mem.inspect(self, addr);
+        let r = mem.inspect(self, addr.wrapping_add(1));
         if let Some(l) = l
             && let Some(r) = r
         {
@@ -137,39 +183,10 @@ impl Cpu {
     /// page.
     ///
     /// * `addr`: The memory address
-    fn read_mem16_pw(&mut self, bus: &mut CpuBus, addr: u16) -> u16 {
-        let l = self.read_mem8(bus, addr);
-        let r = self.read_mem8(bus, (addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
+    fn read_mem16_pw<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: u16) -> u16 {
+        let l = mem.read(self, addr);
+        let r = mem.read(self, (addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
         u16::from_le_bytes([l, r])
-    }
-
-    fn write_mem8(&mut self, bus: &mut CpuBus, addr: u16, val: u8) {
-        match addr {
-            0x0000..=0x1FFF => {
-                self.ram[addr as usize % 0x800] = val;
-            }
-            0x2000..=0x3FFF => {
-                bus.ppu.cpu_write_register(bus.cart, addr, val);
-            }
-            0x4014 => {
-                self.oam_dma(bus, val);
-            }
-            0x4000..=0x4015 => {
-                bus.apu.write_register(addr, val);
-            }
-            0x4016 => {
-                bus.controller_shifters[0] = bus.controllers[0].bits();
-            }
-            0x4017 => {
-                bus.controller_shifters[0] = bus.controllers[0].bits();
-            }
-            0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
-            }
-            0x4020..=0xFFFF => {
-                bus.cart.write8(addr - 0x4020, val);
-            }
-        }
     }
 
     pub(crate) fn init(&mut self, bus: &mut CpuBus) {
@@ -193,15 +210,13 @@ impl Cpu {
 
             cyc: 7,
 
-            ram: [0x00; 0x800],
-
             history: [0x0; 64],
             history_i: Self::HISTORY_LEN - 1,
         }
     }
 
-    fn fetch8(&mut self, bus: &mut CpuBus) -> u8 {
-        let v = self.read_mem8(bus, self.pc);
+    fn fetch8<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u8 {
+        let v = mem.read(self, self.pc);
         self.pc += 1;
         v
     }
@@ -270,24 +285,24 @@ impl Cpu {
         }
     }
 
-    fn read8(&mut self, bus: &mut CpuBus, addr: Addr) -> u8 {
+    fn read8<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: Addr) -> u8 {
         match addr {
             Addr::A => self.a,
-            Addr::Mem(a) => self.read_mem8(bus, a),
+            Addr::Mem(a) => mem.read(self, a),
             Addr::MemPC(a) => {
                 self.cyc += 1;
-                self.read_mem8(bus, a)
+                mem.read(self, a)
             }
             Addr::Rel(_) => unreachable!(),
         }
     }
 
-    fn write8(&mut self, bus: &mut CpuBus, addr: Addr, v: u8) {
+    fn write8<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: Addr, v: u8) {
         match addr {
             Addr::A => {
                 self.a = v;
             }
-            Addr::Mem(a) | Addr::MemPC(a) => self.write_mem8(bus, a, v),
+            Addr::Mem(a) | Addr::MemPC(a) => mem.write(self, a, v),
             Addr::Rel(_) => unreachable!(),
         }
     }
@@ -417,36 +432,26 @@ impl Cpu {
         self.p.set(P::NEGATIVE, r.wrapping_sub(v) & 0x80 != 0);
     }
 
-    fn push8(&mut self, bus: &mut CpuBus, v: u8) {
-        self.write_mem8(bus, 0x0100 + self.sp as u16, v);
+    fn push8<Mem: CpuMemory>(&mut self, mem: &mut Mem, v: u8) {
+        mem.write(self, 0x0100 + self.sp as u16, v);
         self.sp = self.sp.wrapping_sub(1);
     }
 
-    fn push16(&mut self, bus: &mut CpuBus, v: u16) {
+    fn push16<Mem: CpuMemory>(&mut self, mem: &mut Mem, v: u16) {
         let [l, r] = v.to_le_bytes();
-        self.push8(bus, r);
-        self.push8(bus, l);
+        self.push8(mem, r);
+        self.push8(mem, l);
     }
 
-    fn pop8(&mut self, bus: &mut CpuBus) -> u8 {
+    fn pop8<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        self.read_mem8(bus, 0x0100 + self.sp as u16)
+        mem.read(self, 0x0100 + self.sp as u16)
     }
 
-    fn pop16(&mut self, bus: &mut CpuBus) -> u16 {
-        let l = self.pop8(bus);
-        let r = self.pop8(bus);
+    fn pop16<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u16 {
+        let l = self.pop8(mem);
+        let r = self.pop8(mem);
         u16::from_le_bytes([l, r])
-    }
-
-    pub fn oam_dma(&mut self, bus: &mut CpuBus, v: u8) {
-        // Either 513 or 514 depending if on a put or write cycle, hard to implement
-        self.cyc += 514;
-        let mut mem_i = (v as u16) << 8;
-        for i in 0..256 {
-            bus.ppu.oam[i] = self.read_mem8(bus, mem_i);
-            mem_i += 1;
-        }
     }
 
     // Operations
@@ -908,16 +913,16 @@ impl Cpu {
         // Illegal opcode not implemented
     }
 
-    pub fn print_op(&self, bus: &CpuBus, addr: u16) -> String {
-        let Some(opcode) = self.inspect_mem8(bus, addr) else {
+    pub fn print_op<Mem: CpuMemory>(&self, mem: &Mem, addr: u16) -> String {
+        let Some(opcode) = mem.inspect(self, addr) else {
             return "?".to_string();
         };
         macro_rules! read_8(($base:expr, $offset:expr) => {
-            self.inspect_mem8(bus, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
+            mem.inspect(self, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
         });
 
         macro_rules! read_16(($base:expr, $offset:expr) => {
-            self.inspect_mem16(bus, $base.wrapping_add($offset)).map(|v| format!("${:04x}", v)).unwrap_or("$????".to_string())
+            self.inspect_mem16(mem, $base.wrapping_add($offset)).map(|v| format!("${:04x}", v)).unwrap_or("$????".to_string())
         });
 
         let (op, addr_mode, _, _) = OPCODE_MATRIX[opcode as usize];
