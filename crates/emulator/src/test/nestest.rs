@@ -2,7 +2,10 @@
 mod tests {
     use crate::controller::NesController;
     use crate::{apu::Apu, cpu::CpuBus, ppu::Ppu};
-    use crate::{cart::Cart, cpu::Cpu};
+    use crate::{
+        carts::{read_rom, Cart},
+        cpu::Cpu,
+    };
 
     #[derive(PartialEq)]
     struct LogEntry {
@@ -51,8 +54,7 @@ mod tests {
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
 
-        let cart =
-            &mut Cart::read_ines1_0(include_bytes!("../../test_roms/nestest/nestest.nes")).unwrap();
+        let cart = &mut read_rom(include_bytes!("../../test_roms/nestest/nestest.nes")).unwrap();
         let mut cpu = Cpu::new();
         let cpu_bus = &mut CpuBus {
             apu: &mut Apu::new(),
