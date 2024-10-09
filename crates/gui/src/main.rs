@@ -10,7 +10,7 @@ use eframe::egui::{
 use egui::Id;
 use nemu_emulator::{
     controller::NesController,
-    cpu::{Cpu, CpuBus, CpuMemory},
+    cpu::{Cpu, CpuMemory},
     emulator::Emulator,
     ppu::{PpuCtrl, PALETTE},
 };

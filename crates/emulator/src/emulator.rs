@@ -2,7 +2,8 @@ use crate::{
     apu::Apu,
     carts::Cart,
     controller::NesController,
-    cpu::{Cpu, CpuBus},
+    cpu::Cpu,
+    nes_cpu_bus::NesCpuBus,
     ppu::{Display, Ppu, PpuCtrl},
 };
 
@@ -50,7 +51,7 @@ impl Emulator {
 
         let did_nmi = ppu.nmi;
         if ppu.nmi && ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
-            cpu.nmi_interrupt(&mut CpuBus {
+            cpu.nmi_interrupt(&mut NesCpuBus {
                 apu,
                 ppu,
                 cart,
@@ -61,7 +62,7 @@ impl Emulator {
         }
         ppu.nmi = false;
 
-        let cpu_cycles = cpu.tick(&mut CpuBus {
+        let cpu_cycles = cpu.tick(&mut NesCpuBus {
             apu,
             ppu,
             cart,
@@ -101,7 +102,7 @@ impl Emulator {
             ram,
         } = &mut emu;
 
-        cpu.init(&mut CpuBus {
+        cpu.init(&mut NesCpuBus {
             apu,
             ppu,
             cart,

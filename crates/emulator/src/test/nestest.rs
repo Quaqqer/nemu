@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
     use crate::controller::NesController;
-    use crate::{apu::Apu, cpu::CpuBus, ppu::Ppu};
+    use crate::nes_cpu_bus::NesCpuBus;
+    use crate::{apu::Apu, ppu::Ppu};
     use crate::{
         carts::{read_rom, Cart},
         cpu::Cpu,
@@ -56,7 +57,7 @@ mod tests {
 
         let cart = &mut read_rom(include_bytes!("../../test_roms/nestest/nestest.nes")).unwrap();
         let mut cpu = Cpu::new();
-        let cpu_bus = &mut CpuBus {
+        let cpu_bus = &mut NesCpuBus {
             apu: &mut Apu::new(),
             ppu: &mut Ppu::new(),
             cart,

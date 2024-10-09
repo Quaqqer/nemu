@@ -1,8 +1,4 @@
-use crate::apu::Apu;
-use crate::carts::Cart;
-use crate::controller::NesController;
 use crate::op::{AddrMode, Op, OPCODE_MATRIX};
-use crate::ppu::Ppu;
 use bitflags::bitflags;
 
 /// The status register
@@ -41,88 +37,6 @@ pub struct Cpu {
 
     pub history: [u16; Self::HISTORY_LEN],
     pub history_i: usize,
-}
-
-pub struct CpuBus<'a> {
-    pub ram: &'a mut [u8; 0x800],
-    pub apu: &'a mut Apu,
-    pub ppu: &'a mut Ppu,
-    pub cart: &'a mut Cart,
-    pub controllers: &'a [NesController; 2],
-    pub controller_shifters: &'a mut [u8; 2],
-}
-
-impl<'a> CpuMemory for CpuBus<'a> {
-    fn read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
-        match addr {
-            0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
-            0x2000..=0x3FFF => self.ppu.cpu_read_register(self.cart, addr),
-            0x4000..=0x4015 => self.apu.read_register(addr),
-            0x4016 => {
-                let v = (self.controller_shifters[0] & 0x80 != 0) as u8;
-                self.controller_shifters[0] <<= 1;
-                v
-            }
-            0x4017 => {
-                let v = (self.controller_shifters[0] & 0x80 != 0) as u8;
-                self.controller_shifters[0] <<= 1;
-                v
-            }
-            0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
-            }
-            0x4020..=0xFFFF => self.cart.cpu_read(addr),
-        }
-    }
-
-    fn inspect(&self, _cpu: &Cpu, addr: u16) -> Option<u8> {
-        match addr {
-            0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
-            0x2000..=0x3FFF => None,
-            0x4000..=0x4017 => None,
-            0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
-            }
-            0x4020..=0xFFFF => Some(self.cart.cpu_inspect(addr)),
-        }
-    }
-
-    fn write(&mut self, cpu: &mut Cpu, addr: u16, val: u8) {
-        match addr {
-            0x0000..=0x1FFF => {
-                self.ram[addr as usize % 0x800] = val;
-            }
-            0x2000..=0x3FFF => {
-                self.ppu.cpu_write_register(self.cart, addr, val);
-            }
-            0x4014 => {
-                // Perform OAM DMA
-
-                // Either 513 or 514 depending if on a put or write cycle, hard to implement
-                cpu.cyc += 514;
-                let mut mem_i = (val as u16) << 8;
-                for i in 0..256 {
-                    self.ppu.oam[i] = self.read(cpu, mem_i);
-                    mem_i += 1;
-                }
-            }
-            0x4000..=0x4015 => {
-                self.apu.write_register(addr, val);
-            }
-            0x4016 => {
-                self.controller_shifters[0] = self.controllers[0].bits();
-            }
-            0x4017 => {
-                self.controller_shifters[0] = self.controllers[0].bits();
-            }
-            0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
-            }
-            0x4020..=0xFFFF => {
-                self.cart.cpu_write(addr, val);
-            }
-        }
-    }
 }
 
 impl std::fmt::Debug for Cpu {
@@ -189,8 +103,8 @@ impl Cpu {
         u16::from_le_bytes([l, r])
     }
 
-    pub(crate) fn init(&mut self, bus: &mut CpuBus) {
-        let start_addr = self.read_mem16(bus, 0xFFFC);
+    pub(crate) fn init<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        let start_addr = self.read_mem16(mem, 0xFFFC);
         self.pc = start_addr;
     }
 
@@ -221,13 +135,13 @@ impl Cpu {
         v
     }
 
-    fn fetch16(&mut self, bus: &mut CpuBus) -> u16 {
-        let v = self.read_mem16(bus, self.pc);
+    fn fetch16<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u16 {
+        let v = self.read_mem16(mem, self.pc);
         self.pc += 2;
         v
     }
 
-    fn fetch_addr(&mut self, bus: &mut CpuBus, m: AddrMode, pc_add: bool) -> Addr {
+    fn fetch_addr<Mem: CpuMemory>(&mut self, mem: &mut Mem, m: AddrMode, pc_add: bool) -> Addr {
         use AddrMode::*;
         match m {
             Acc => Addr::A,
@@ -236,13 +150,13 @@ impl Cpu {
                 self.pc = self.pc.wrapping_add(1);
                 v
             }
-            Zp0 => Addr::Mem(self.fetch8(bus) as u16),
-            ZpX => Addr::Mem(self.fetch8(bus).wrapping_add(self.x) as u16),
-            ZpY => Addr::Mem(self.fetch8(bus).wrapping_add(self.y) as u16),
-            Rel => Addr::Rel(self.fetch8(bus) as i8),
-            Abs => Addr::Mem(self.fetch16(bus)),
+            Zp0 => Addr::Mem(self.fetch8(mem) as u16),
+            ZpX => Addr::Mem(self.fetch8(mem).wrapping_add(self.x) as u16),
+            ZpY => Addr::Mem(self.fetch8(mem).wrapping_add(self.y) as u16),
+            Rel => Addr::Rel(self.fetch8(mem) as i8),
+            Abs => Addr::Mem(self.fetch16(mem)),
             AbX => {
-                let abs = self.fetch16(bus);
+                let abs = self.fetch16(mem);
                 let a = abs.wrapping_add(self.x as u16);
 
                 if pc_add && a & 0xFF < abs & 0xFF {
@@ -252,7 +166,7 @@ impl Cpu {
                 }
             }
             AbY => {
-                let abs = self.fetch16(bus);
+                let abs = self.fetch16(mem);
                 let a = abs.wrapping_add(self.y as u16);
 
                 if pc_add && a & 0xFF < abs & 0xFF {
@@ -262,18 +176,18 @@ impl Cpu {
                 }
             }
             Ind => {
-                let a = self.fetch16(bus);
-                let a = self.read_mem16_pw(bus, a);
+                let a = self.fetch16(mem);
+                let a = self.read_mem16_pw(mem, a);
                 Addr::Mem(a)
             }
             IdX => {
-                let a = self.fetch8(bus).wrapping_add(self.x);
-                let a = self.read_mem16_pw(bus, a as u16);
+                let a = self.fetch8(mem).wrapping_add(self.x);
+                let a = self.read_mem16_pw(mem, a as u16);
                 Addr::Mem(a)
             }
             IdY => {
-                let a = self.fetch8(bus);
-                let abs = self.read_mem16_pw(bus, a as u16);
+                let a = self.fetch8(mem);
+                let abs = self.read_mem16_pw(mem, a as u16);
                 let a = abs.wrapping_add(self.y as u16);
 
                 if pc_add && a & 0xFF < abs & 0xFF {
@@ -307,97 +221,97 @@ impl Cpu {
         }
     }
 
-    pub fn tick(&mut self, bus: &mut CpuBus) -> u64 {
+    pub fn tick<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u64 {
         self.history_i = (self.history_i + 1) % Self::HISTORY_LEN;
         self.history[self.history_i] = self.pc;
 
         let start_cycle = self.cyc;
 
-        let opcode = self.fetch8(bus);
+        let opcode = self.fetch8(mem);
 
         let (op, addr_mode, cycles, pc_add) = OPCODE_MATRIX[opcode as usize];
-        let addr = self.fetch_addr(bus, addr_mode, pc_add);
+        let addr = self.fetch_addr(mem, addr_mode, pc_add);
 
         self.cyc += cycles as u64;
 
         match op {
-            Op::Adc => self.adc(bus, addr),
-            Op::And => self.and(bus, addr),
-            Op::Asl => self.asl(bus, addr),
-            Op::Bcc => self.bcc(bus, addr),
-            Op::Bcs => self.bcs(bus, addr),
-            Op::Beq => self.beq(bus, addr),
-            Op::Bit => self.bit(bus, addr),
-            Op::Bmi => self.bmi(bus, addr),
-            Op::Bne => self.bne(bus, addr),
-            Op::Bpl => self.bpl(bus, addr),
-            Op::Brk => self.brk(bus),
-            Op::Bvc => self.bvc(bus, addr),
-            Op::Bvs => self.bvs(bus, addr),
-            Op::Clc => self.clc(bus),
-            Op::Cld => self.cld(bus),
-            Op::Cli => self.cli(bus),
-            Op::Clv => self.clv(bus),
-            Op::Cmp => self.cmp(bus, addr),
-            Op::Cpx => self.cpx(bus, addr),
-            Op::Cpy => self.cpy(bus, addr),
-            Op::Dec => self.dec(bus, addr),
-            Op::Dex => self.dex(bus),
-            Op::Dey => self.dey(bus),
-            Op::Eor => self.eor(bus, addr),
-            Op::Inc => self.inc(bus, addr),
-            Op::Inx => self.inx(bus),
-            Op::Iny => self.iny(bus),
-            Op::Jmp => self.jmp(bus, addr),
-            Op::Jsr => self.jsr(bus, addr),
-            Op::Lda => self.lda(bus, addr),
-            Op::Ldx => self.ldx(bus, addr),
-            Op::Ldy => self.ldy(bus, addr),
-            Op::Lsr => self.lsr(bus, addr),
-            Op::Nop => self.nop(bus, addr),
-            Op::Ora => self.ora(bus, addr),
-            Op::Pha => self.pha(bus),
-            Op::Php => self.php(bus),
-            Op::Pla => self.pla(bus),
-            Op::Plp => self.plp(bus),
-            Op::Rol => self.rol(bus, addr),
-            Op::Ror => self.ror(bus, addr),
-            Op::Rti => self.rti(bus),
-            Op::Rts => self.rts(bus),
-            Op::Sbc => self.sbc(bus, addr),
-            Op::Sec => self.sec(bus),
-            Op::Sed => self.sed(bus),
-            Op::Sei => self.sei(bus),
-            Op::Sta => self.sta(bus, addr),
-            Op::Stx => self.stx(bus, addr),
-            Op::Sty => self.sty(bus, addr),
-            Op::Tax => self.tax(bus),
-            Op::Tay => self.tay(bus),
-            Op::Tsx => self.tsx(bus),
-            Op::Txa => self.txa(bus),
-            Op::Txs => self.txs(bus),
-            Op::Tya => self.tya(bus),
+            Op::Adc => self.adc(mem, addr),
+            Op::And => self.and(mem, addr),
+            Op::Asl => self.asl(mem, addr),
+            Op::Bcc => self.bcc(mem, addr),
+            Op::Bcs => self.bcs(mem, addr),
+            Op::Beq => self.beq(mem, addr),
+            Op::Bit => self.bit(mem, addr),
+            Op::Bmi => self.bmi(mem, addr),
+            Op::Bne => self.bne(mem, addr),
+            Op::Bpl => self.bpl(mem, addr),
+            Op::Brk => self.brk(mem),
+            Op::Bvc => self.bvc(mem, addr),
+            Op::Bvs => self.bvs(mem, addr),
+            Op::Clc => self.clc(mem),
+            Op::Cld => self.cld(mem),
+            Op::Cli => self.cli(mem),
+            Op::Clv => self.clv(mem),
+            Op::Cmp => self.cmp(mem, addr),
+            Op::Cpx => self.cpx(mem, addr),
+            Op::Cpy => self.cpy(mem, addr),
+            Op::Dec => self.dec(mem, addr),
+            Op::Dex => self.dex(mem),
+            Op::Dey => self.dey(mem),
+            Op::Eor => self.eor(mem, addr),
+            Op::Inc => self.inc(mem, addr),
+            Op::Inx => self.inx(mem),
+            Op::Iny => self.iny(mem),
+            Op::Jmp => self.jmp(mem, addr),
+            Op::Jsr => self.jsr(mem, addr),
+            Op::Lda => self.lda(mem, addr),
+            Op::Ldx => self.ldx(mem, addr),
+            Op::Ldy => self.ldy(mem, addr),
+            Op::Lsr => self.lsr(mem, addr),
+            Op::Nop => self.nop(mem, addr),
+            Op::Ora => self.ora(mem, addr),
+            Op::Pha => self.pha(mem),
+            Op::Php => self.php(mem),
+            Op::Pla => self.pla(mem),
+            Op::Plp => self.plp(mem),
+            Op::Rol => self.rol(mem, addr),
+            Op::Ror => self.ror(mem, addr),
+            Op::Rti => self.rti(mem),
+            Op::Rts => self.rts(mem),
+            Op::Sbc => self.sbc(mem, addr),
+            Op::Sec => self.sec(mem),
+            Op::Sed => self.sed(mem),
+            Op::Sei => self.sei(mem),
+            Op::Sta => self.sta(mem, addr),
+            Op::Stx => self.stx(mem, addr),
+            Op::Sty => self.sty(mem, addr),
+            Op::Tax => self.tax(mem),
+            Op::Tay => self.tay(mem),
+            Op::Tsx => self.tsx(mem),
+            Op::Txa => self.txa(mem),
+            Op::Txs => self.txs(mem),
+            Op::Tya => self.tya(mem),
 
             // Illegal opcodes
-            Op::Ahx => self.ahx(bus),
-            Op::Alr => self.alr(bus),
-            Op::Anc => self.anc(bus),
-            Op::Arr => self.arr(bus),
-            Op::Axs => self.axs(bus),
-            Op::Dcp => self.dcp(bus, addr),
-            Op::Kil => self.kil(bus),
-            Op::Isc => self.isc(bus, addr),
-            Op::Las => self.las(bus),
-            Op::Lax => self.lax(bus, addr),
-            Op::Rla => self.rla(bus, addr),
-            Op::Rra => self.rra(bus, addr),
-            Op::Sax => self.sax(bus, addr),
-            Op::Shx => self.shx(bus),
-            Op::Shy => self.shy(bus),
-            Op::Slo => self.slo(bus, addr),
-            Op::Sre => self.sre(bus, addr),
-            Op::Tas => self.tas(bus),
-            Op::Xaa => self.xaa(bus),
+            Op::Ahx => self.ahx(mem),
+            Op::Alr => self.alr(mem),
+            Op::Anc => self.anc(mem),
+            Op::Arr => self.arr(mem),
+            Op::Axs => self.axs(mem),
+            Op::Dcp => self.dcp(mem, addr),
+            Op::Kil => self.kil(mem),
+            Op::Isc => self.isc(mem, addr),
+            Op::Las => self.las(mem),
+            Op::Lax => self.lax(mem, addr),
+            Op::Rla => self.rla(mem, addr),
+            Op::Rra => self.rra(mem, addr),
+            Op::Sax => self.sax(mem, addr),
+            Op::Shx => self.shx(mem),
+            Op::Shy => self.shy(mem),
+            Op::Slo => self.slo(mem, addr),
+            Op::Sre => self.sre(mem, addr),
+            Op::Tas => self.tas(mem),
+            Op::Xaa => self.xaa(mem),
         }
 
         self.cyc - start_cycle
@@ -456,9 +370,9 @@ impl Cpu {
 
     // Operations
 
-    fn adc(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn adc<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
         let lhs = self.a as u16;
-        let rhs = self.read8(bus, a) as u16;
+        let rhs = self.read8(mem, a) as u16;
         let carry = self.p.intersects(P::CARRY) as u16;
 
         let res = lhs + rhs + carry;
@@ -472,161 +386,161 @@ impl Cpu {
         self.p.set(P::CARRY, res > 0xFF);
     }
 
-    fn and(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.a &= self.read8(bus, a);
+    fn and<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.a &= self.read8(mem, a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn asl(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn asl<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         let new_v = v << 1;
 
         self.p.set(P::CARRY, v & 0x80 != 0);
         self.update_zero(new_v);
         self.update_negative(new_v);
 
-        self.write8(bus, a, new_v);
+        self.write8(mem, a, new_v);
     }
 
-    fn bcc(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bcc<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::CARRY));
     }
 
-    fn bcs(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bcs<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::CARRY));
     }
 
-    fn beq(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn beq<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::ZERO));
     }
 
-    fn bit(&mut self, bus: &mut CpuBus, a: Addr) {
-        let m = self.read8(bus, a);
+    fn bit<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let m = self.read8(mem, a);
         let v = self.a & m;
         self.p.set(P::OVERFLOW, m & (1 << 6) != 0);
         self.p.set(P::NEGATIVE, m & (1 << 7) != 0);
         self.p.set(P::ZERO, m & v == 0);
     }
 
-    fn bmi(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bmi<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::NEGATIVE));
     }
 
-    fn bne(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bne<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::ZERO));
     }
 
-    fn bpl(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bpl<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::NEGATIVE));
     }
 
-    fn brk(&mut self, bus: &mut CpuBus) {
-        self.push16(bus, self.pc);
-        self.push8(bus, (self.p | P::_5 | P::B).bits());
+    fn brk<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.push16(mem, self.pc);
+        self.push8(mem, (self.p | P::_5 | P::B).bits());
         self.p |= P::INTERRUPT_DISABLE;
-        self.pc = self.read_mem16(bus, 0xFFFE);
+        self.pc = self.read_mem16(mem, 0xFFFE);
     }
 
-    fn bvc(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bvc<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| !cpu.p.intersects(P::OVERFLOW));
     }
 
-    fn bvs(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn bvs<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         self.generic_branch(a, |cpu| cpu.p.intersects(P::OVERFLOW));
     }
 
-    fn clc(&mut self, _bus: &mut CpuBus) {
+    fn clc<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p -= P::CARRY;
     }
 
-    fn cld(&mut self, _bus: &mut CpuBus) {
+    fn cld<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p -= P::DECIMAL;
     }
 
-    fn cli(&mut self, _bus: &mut CpuBus) {
+    fn cli<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p -= P::INTERRUPT_DISABLE;
     }
 
-    fn clv(&mut self, _bus: &mut CpuBus) {
+    fn clv<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p -= P::OVERFLOW;
     }
 
-    fn cmp(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn cmp<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         self.compare(self.a, v);
     }
 
-    fn cpx(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn cpx<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         self.compare(self.x, v);
     }
 
-    fn cpy(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn cpy<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         self.compare(self.y, v);
     }
 
-    fn dcp(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a).wrapping_sub(1);
-        self.write8(bus, a, v);
+    fn dcp<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a).wrapping_sub(1);
+        self.write8(mem, a, v);
         self.update_zero(v);
         self.update_negative(v);
         self.compare(self.a, v);
     }
 
-    fn dec(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a).wrapping_sub(1);
-        self.write8(bus, a, v);
+    fn dec<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a).wrapping_sub(1);
+        self.write8(mem, a, v);
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn dex(&mut self, _bus: &mut CpuBus) {
+    fn dex<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.x = self.x.wrapping_sub(1);
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn dey(&mut self, _bus: &mut CpuBus) {
+    fn dey<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.y = self.y.wrapping_sub(1);
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn eor(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.a ^= self.read8(bus, a);
+    fn eor<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.a ^= self.read8(mem, a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn inc(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a).wrapping_add(1);
-        self.write8(bus, a, v);
+    fn inc<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a).wrapping_add(1);
+        self.write8(mem, a, v);
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn inx(&mut self, _bus: &mut CpuBus) {
+    fn inx<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         let v = self.x.wrapping_add(1);
         self.x = v;
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn iny(&mut self, _bus: &mut CpuBus) {
+    fn iny<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         let v = self.y.wrapping_add(1);
         self.y = v;
         self.update_zero(v);
         self.update_negative(v);
     }
 
-    fn isc(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.inc(bus, a);
-        self.sbc(bus, a);
+    fn isc<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.inc(mem, a);
+        self.sbc(mem, a);
     }
 
-    fn jmp(&mut self, _bus: &mut CpuBus, a: Addr) {
+    fn jmp<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
         if let Addr::Mem(m) = a {
             self.pc = m;
         } else {
@@ -634,17 +548,17 @@ impl Cpu {
         }
     }
 
-    fn jsr(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn jsr<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
         if let Addr::Mem(a) = a {
-            self.push16(bus, self.pc - 1);
+            self.push16(mem, self.pc - 1);
             self.pc = a;
         } else {
             unreachable!();
         }
     }
 
-    fn lax(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn lax<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         self.a = v;
         self.x = v;
 
@@ -652,71 +566,71 @@ impl Cpu {
         self.update_negative(v);
     }
 
-    fn lda(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.a = self.read8(bus, a);
+    fn lda<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.a = self.read8(mem, a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn ldx(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.x = self.read8(bus, a);
+    fn ldx<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.x = self.read8(mem, a);
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn ldy(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.y = self.read8(bus, a);
+    fn ldy<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.y = self.read8(mem, a);
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn lsr(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn lsr<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         let new_v = v >> 1;
 
         self.p.set(P::CARRY, v & 1 != 0);
         self.update_zero(new_v);
         self.update_negative(new_v);
 
-        self.write8(bus, a, new_v);
+        self.write8(mem, a, new_v);
     }
 
-    fn nop(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.read8(bus, a);
+    fn nop<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.read8(mem, a);
     }
 
-    fn ora(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.a |= self.read8(bus, a);
+    fn ora<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.a |= self.read8(mem, a);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn pha(&mut self, bus: &mut CpuBus) {
-        self.push8(bus, self.a);
+    fn pha<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.push8(mem, self.a);
     }
 
-    fn php(&mut self, bus: &mut CpuBus) {
+    fn php<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
         let p = self.p | P::_5 | P::B;
-        self.push8(bus, p.bits());
+        self.push8(mem, p.bits());
     }
 
-    fn pla(&mut self, bus: &mut CpuBus) {
-        self.a = self.pop8(bus);
+    fn pla<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.a = self.pop8(mem);
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn plp(&mut self, bus: &mut CpuBus) {
-        self.p = (P::from_bits(self.pop8(bus)).unwrap() - P::B) | P::_5;
+    fn plp<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.p = (P::from_bits(self.pop8(mem)).unwrap() - P::B) | P::_5;
     }
 
-    fn rla(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.rol(bus, a);
-        self.and(bus, a);
+    fn rla<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.rol(mem, a);
+        self.and(mem, a);
     }
 
-    fn rol(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn rol<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         let mut new_v = v << 1;
         if self.p.intersects(P::CARRY) {
             new_v |= 0x01;
@@ -726,11 +640,11 @@ impl Cpu {
         self.update_zero(new_v);
         self.update_negative(new_v);
 
-        self.write8(bus, a, new_v);
+        self.write8(mem, a, new_v);
     }
 
-    fn ror(&mut self, bus: &mut CpuBus, a: Addr) {
-        let v = self.read8(bus, a);
+    fn ror<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        let v = self.read8(mem, a);
         let mut new_v = v >> 1;
         if self.p.intersects(P::CARRY) {
             new_v |= 0x80;
@@ -740,31 +654,31 @@ impl Cpu {
         self.update_zero(new_v);
         self.update_negative(new_v);
 
-        self.write8(bus, a, new_v);
+        self.write8(mem, a, new_v);
     }
 
-    fn rra(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.ror(bus, a);
-        self.adc(bus, a);
+    fn rra<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.ror(mem, a);
+        self.adc(mem, a);
     }
 
-    fn rti(&mut self, bus: &mut CpuBus) {
-        self.p = P::from_bits(self.pop8(bus)).unwrap() | P::_5;
-        self.pc = self.pop16(bus);
+    fn rti<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.p = P::from_bits(self.pop8(mem)).unwrap() | P::_5;
+        self.pc = self.pop16(mem);
     }
 
-    fn rts(&mut self, bus: &mut CpuBus) {
-        self.pc = self.pop16(bus) + 1;
+    fn rts<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.pc = self.pop16(mem) + 1;
     }
 
-    fn sax(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn sax<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
         let v = self.a & self.x;
-        self.write8(bus, a, v);
+        self.write8(mem, a, v);
     }
 
-    fn sbc(&mut self, bus: &mut CpuBus, a: Addr) {
+    fn sbc<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
         let lhs = self.a as i16;
-        let rhs = self.read8(bus, a) as i16;
+        let rhs = self.read8(mem, a) as i16;
         let borrow = !self.p.intersects(P::CARRY) as i16;
 
         let res = lhs - rhs - borrow;
@@ -780,69 +694,69 @@ impl Cpu {
         self.a = res8;
     }
 
-    fn sec(&mut self, _bus: &mut CpuBus) {
+    fn sec<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p |= P::CARRY;
     }
 
-    fn sed(&mut self, _bus: &mut CpuBus) {
+    fn sed<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p |= P::DECIMAL;
     }
 
-    fn sei(&mut self, _bus: &mut CpuBus) {
+    fn sei<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.p |= P::INTERRUPT_DISABLE;
     }
 
-    fn slo(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.asl(bus, a);
-        self.ora(bus, a);
+    fn slo<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.asl(mem, a);
+        self.ora(mem, a);
     }
 
-    fn sre(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.lsr(bus, a);
-        self.eor(bus, a);
+    fn sre<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.lsr(mem, a);
+        self.eor(mem, a);
     }
 
-    fn sta(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.write8(bus, a, self.a);
+    fn sta<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.write8(mem, a, self.a);
     }
 
-    fn stx(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.write8(bus, a, self.x);
+    fn stx<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.write8(mem, a, self.x);
     }
 
-    fn sty(&mut self, bus: &mut CpuBus, a: Addr) {
-        self.write8(bus, a, self.y);
+    fn sty<Mem: CpuMemory>(&mut self, mem: &mut Mem, a: Addr) {
+        self.write8(mem, a, self.y);
     }
 
-    fn tax(&mut self, _bus: &mut CpuBus) {
+    fn tax<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.x = self.a;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn tay(&mut self, _bus: &mut CpuBus) {
+    fn tay<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.y = self.a;
         self.update_zero(self.y);
         self.update_negative(self.y);
     }
 
-    fn tsx(&mut self, _bus: &mut CpuBus) {
+    fn tsx<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.x = self.sp;
         self.update_zero(self.x);
         self.update_negative(self.x);
     }
 
-    fn txa(&mut self, _bus: &mut CpuBus) {
+    fn txa<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.a = self.x;
         self.update_zero(self.a);
         self.update_negative(self.a);
     }
 
-    fn txs(&mut self, _bus: &mut CpuBus) {
+    fn txs<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.sp = self.x;
     }
 
-    fn tya(&mut self, _bus: &mut CpuBus) {
+    fn tya<Mem: CpuMemory>(&mut self, _mem: &mut Mem) {
         self.a = self.y;
         self.update_zero(self.a);
         self.update_negative(self.a);
@@ -862,54 +776,54 @@ impl Cpu {
         }
     }
 
-    pub fn nmi_interrupt(&mut self, bus: &mut CpuBus) {
-        self.push16(bus, self.pc);
-        self.push8(bus, self.p.bits());
+    pub fn nmi_interrupt<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        self.push16(mem, self.pc);
+        self.push8(mem, self.p.bits());
         self.p |= P::INTERRUPT_DISABLE;
-        self.pc = self.read_mem16(bus, 0xfffa);
+        self.pc = self.read_mem16(mem, 0xfffa);
     }
 
-    fn tas(&self, _bus: &mut CpuBus) {
+    fn tas<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn xaa(&self, _bus: &mut CpuBus) {
+    fn xaa<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn shy(&self, _bus: &mut CpuBus) {
+    fn shy<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn shx(&self, _bus: &mut CpuBus) {
+    fn shx<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn las(&self, _bus: &mut CpuBus) {
+    fn las<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn axs(&self, _bus: &mut CpuBus) {
+    fn axs<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn kil(&self, _bus: &mut CpuBus) {
+    fn kil<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn arr(&self, _bus: &mut CpuBus) {
+    fn arr<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn anc(&self, _bus: &mut CpuBus) {
+    fn anc<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn alr(&self, _bus: &mut CpuBus) {
+    fn alr<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
-    fn ahx(&self, _bus: &mut CpuBus) {
+    fn ahx<Mem: CpuMemory>(&self, _mem: &mut Mem) {
         // Illegal opcode not implemented
     }
 
