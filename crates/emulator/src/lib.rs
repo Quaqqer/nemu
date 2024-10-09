@@ -7,7 +7,6 @@ pub mod controller;
 pub mod cpu;
 pub mod emulator;
 pub mod nes_cpu_bus;
-pub mod op;
 pub mod ppu;
 mod test;
 mod util;

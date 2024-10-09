@@ -1,5 +1,6 @@
-use crate::op::{AddrMode, Op, OPCODE_MATRIX};
 use bitflags::bitflags;
+
+use crate::cpu::op::{AddrMode, Op, OPCODE_MATRIX};
 
 /// The status register
 #[derive(Clone, Copy)]
