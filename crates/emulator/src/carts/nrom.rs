@@ -1,4 +1,4 @@
-use super::{Cart, MapperTrait, Mirroring};
+use super::{Cart, MapperTrait};
 
 pub struct NROM {}
 

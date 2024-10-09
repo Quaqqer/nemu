@@ -14,7 +14,7 @@ wasm-bindgen = "0.2.84"
 # logging them with `console.error`. This is great for development, but requires
 # all the `std::fmt` and `std::panicking` infrastructure, so isn't great for
 # code size when deploying.
-console_error_panic_hook = { version = "0.1.7" }
+console_error_panic_hook = "0.1.7"
 nemu-emulator = { version = "0.1.0", path = "../emulator" }
 
 [dev-dependencies]
