@@ -192,11 +192,6 @@ fn read_ines2(bin: &[u8], header: INes2Header) -> Option<Box<dyn Cart>> {
     None
 }
 
-#[derive(Clone, Copy)]
-enum Mapper {
-    NROM,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mirroring {
     Horizontal,
