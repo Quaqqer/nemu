@@ -1,45 +1,54 @@
-use super::{Cart, MapperTrait};
+use super::{Cart, Mirroring};
 
-pub struct NROM {}
-
-impl NROM {
-    pub fn new() -> Self {
-        Self {}
-    }
+#[derive(Clone)]
+pub struct NROM {
+    pub mirroring: Mirroring,
+    pub prg_rom: Vec<u8>,
+    pub prg_ram: Vec<u8>,
+    pub chr_rom: Vec<u8>,
+    pub chr_ram: Vec<u8>,
 }
 
-impl MapperTrait for NROM {
-    fn cpu_read(&self, cart: &mut Cart, addr: u16) -> u8 {
-        self.cpu_inspect(cart, addr)
+impl Cart for NROM {
+    fn mirroring(&self) -> Mirroring {
+        self.mirroring
     }
 
-    fn cpu_inspect(&self, cart: &Cart, addr: u16) -> u8 {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
+        self.cpu_inspect(addr)
+    }
+
+    fn cpu_inspect(&self, addr: u16) -> u8 {
         match addr {
             ..0x6000 => 0,
-            0x6000..0x8000 => cart.prg_ram[(addr as usize - 0x6000) % cart.prg_ram.len()],
-            0x8000.. => cart.prg_rom[(addr as usize - 0x8000) % cart.prg_rom.len()],
+            0x6000..0x8000 => self.prg_ram[(addr as usize - 0x6000) % self.prg_ram.len()],
+            0x8000.. => self.prg_rom[(addr as usize - 0x8000) % self.prg_rom.len()],
         }
     }
 
-    fn cpu_write(&self, cart: &mut Cart, addr: u16, v: u8) {
+    fn cpu_write(&mut self, addr: u16, v: u8) {
         match addr {
             ..0x6000 => {}
             0x6000..0x8000 => {
-                let i = (addr as usize - 0x6000) % cart.prg_ram.len();
-                cart.prg_ram[i] = v
+                let i = (addr as usize - 0x6000) % self.prg_ram.len();
+                self.prg_ram[i] = v
             }
             0x8000.. => {}
         }
     }
 
-    fn ppu_read(&self, cart: &mut Cart, addr: u16) -> u8 {
-        let i = addr as usize % cart.chr_rom.len();
-        cart.chr_rom[i]
+    fn ppu_read(&mut self, addr: u16) -> u8 {
+        let i = addr as usize % self.chr_rom.len();
+        self.chr_rom[i]
     }
 
-    fn ppu_write(&self, _cart: &mut Cart, _addr: u16, _v: u8) {}
+    fn ppu_write(&mut self, _addr: u16, _v: u8) {}
 
-    fn reset(&self, _cart: &mut Cart) {
+    fn reset(&mut self) {
         todo!()
+    }
+
+    fn box_cloned(&self) -> Box<dyn Cart> {
+        Box::new(self.clone())
     }
 }

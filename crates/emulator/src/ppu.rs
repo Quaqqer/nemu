@@ -185,7 +185,7 @@ impl Ppu {
     ///
     /// * `cart`: The cart
     /// * `addr`: The memory address
-    pub(crate) fn cpu_read_register(&mut self, cart: &mut Cart, addr: u16) -> u8 {
+    pub(crate) fn cpu_read_register(&mut self, cart: &mut dyn Cart, addr: u16) -> u8 {
         debug_assert!((0x2000..0x4000).contains(&addr) || addr == 0x4014);
 
         if addr == 0x4014 {
@@ -248,7 +248,7 @@ impl Ppu {
     /// * `cart`: The cart
     /// * `addr`: The memory address
     /// * `v`: The value
-    pub(crate) fn cpu_write_register(&mut self, cart: &mut Cart, addr: u16, v: u8) {
+    pub(crate) fn cpu_write_register(&mut self, cart: &mut dyn Cart, addr: u16, v: u8) {
         debug_assert!((0x2000..0x4000).contains(&addr) || addr == 0x4014);
 
         if addr == 0x4014 {
@@ -330,7 +330,7 @@ impl Ppu {
         self.odd = false;
     }
 
-    pub fn cycle(&mut self, cart: &mut Cart) {
+    pub fn cycle(&mut self, cart: &mut dyn Cart) {
         match self.scanline {
             // Visible scanlines and pre-render scanline
             0..240 | 261 => {
@@ -628,10 +628,10 @@ impl Ppu {
         }
     }
 
-    fn read_mem(&mut self, cart: &mut Cart, addr: u16) -> u8 {
+    fn read_mem(&mut self, cart: &mut dyn Cart, addr: u16) -> u8 {
         macro_rules! read_nametable {
             ($n:expr, $addr:expr) => {{
-                match cart.mirroring {
+                match cart.mirroring() {
                     crate::carts::Mirroring::Horizontal => match $n {
                         0 => self.vram[$addr as usize],
                         1 => self.vram[$addr as usize],
@@ -674,10 +674,10 @@ impl Ppu {
         }
     }
 
-    fn write_mem(&mut self, cart: &mut Cart, addr: u16, v: u8) {
+    fn write_mem(&mut self, cart: &mut dyn Cart, addr: u16, v: u8) {
         macro_rules! write_nametable {
             ($n:expr, $addr:expr, $v: expr) => {{
-                let p = match cart.mirroring {
+                let p = match cart.mirroring() {
                     crate::carts::Mirroring::Horizontal => match $n {
                         0 => &mut self.vram[$addr as usize],
                         1 => &mut self.vram[$addr as usize],
@@ -762,12 +762,12 @@ impl Ppu {
         }
     }
 
-    fn fetch_nt(&mut self, cart: &mut Cart) -> u8 {
+    fn fetch_nt(&mut self, cart: &mut dyn Cart) -> u8 {
         let nt_addr = 0x2000 | (self.v & 0x0FFF);
         self.read_mem(cart, nt_addr)
     }
 
-    fn fetch_at(&mut self, cart: &mut Cart) -> u8 {
+    fn fetch_at(&mut self, cart: &mut dyn Cart) -> u8 {
         let attr_addr =
             0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
         let mut attr = self.read_mem(cart, attr_addr);
@@ -781,7 +781,7 @@ impl Ppu {
         attr
     }
 
-    fn fetch_pt_low(&mut self, cart: &mut Cart) -> u8 {
+    fn fetch_pt_low(&mut self, cart: &mut dyn Cart) -> u8 {
         self.read_mem(
             cart,
             (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
@@ -790,7 +790,7 @@ impl Ppu {
         )
     }
 
-    fn fetch_pt_high(&mut self, cart: &mut Cart) -> u8 {
+    fn fetch_pt_high(&mut self, cart: &mut dyn Cart) -> u8 {
         self.read_mem(
             cart,
             (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12

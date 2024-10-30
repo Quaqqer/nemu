@@ -10,7 +10,7 @@ pub struct NesCpuBus<'a> {
     pub ram: &'a mut [u8; 0x800],
     pub apu: &'a mut Apu,
     pub ppu: &'a mut Ppu,
-    pub cart: &'a mut Cart,
+    pub cart: &'a mut dyn Cart,
     pub controllers: &'a [NesController; 2],
     pub controller_shifters: &'a mut [u8; 2],
 }

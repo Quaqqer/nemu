@@ -125,7 +125,7 @@ struct INes2Header {
     _unused: u8,
 }
 
-pub fn read_rom(bin: &[u8]) -> Option<Cart> {
+pub fn read_rom(bin: &[u8]) -> Option<Box<dyn Cart>> {
     let header_bytes = u128::from_le_bytes(TryInto::<[u8; 16]>::try_into(&bin[0..16]).ok()?);
 
     // Read Nes1 format
@@ -141,7 +141,7 @@ pub fn read_rom(bin: &[u8]) -> Option<Cart> {
     }
 }
 
-fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Cart> {
+fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Box<dyn Cart>> {
     let mut i = 16;
 
     let _trainer = if header.trainer() {
@@ -172,79 +172,29 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Cart> {
 
     let mapper_number = header.mapper_number_upper() << 4 | header.mapper_number_lower();
 
-    let mapper = match mapper_number {
-        0 => Mapper::NROM,
+    Some(match mapper_number {
+        0 => Box::new(NROM {
+            mirroring,
+            prg_rom,
+            prg_ram: vec![0x00; 0x2000],
+            chr_rom,
+            chr_ram: vec![],
+        }),
         _ => {
             eprintln!("Mapper number {} not implemented", mapper_number);
             return None;
         }
-    };
-
-    let prg_ram = vec![0x00; 0x2000];
-    let chr_ram = Vec::new();
-
-    Some(Cart {
-        mapper,
-        mirroring,
-        prg_rom,
-        prg_ram,
-        chr_rom,
-        chr_ram,
     })
 }
 
-fn read_ines2(bin: &[u8], header: INes2Header) -> Option<Cart> {
+fn read_ines2(bin: &[u8], header: INes2Header) -> Option<Box<dyn Cart>> {
     eprintln!("iNES 2 roms not supported yet");
     None
-}
-
-#[derive(Clone)]
-pub struct Cart {
-    pub mapper: Mapper,
-    pub mirroring: Mirroring,
-    pub prg_rom: Vec<u8>,
-    pub prg_ram: Vec<u8>,
-    pub chr_rom: Vec<u8>,
-    pub chr_ram: Vec<u8>,
 }
 
 #[derive(Clone, Copy)]
 enum Mapper {
     NROM,
-}
-
-impl Cart {
-    pub fn cpu_read(&mut self, addr: u16) -> u8 {
-        match self.mapper {
-            Mapper::NROM => NROM::new().cpu_read(self, addr),
-        }
-    }
-
-    pub fn cpu_inspect(&self, addr: u16) -> u8 {
-        match self.mapper {
-            Mapper::NROM => NROM::new().cpu_inspect(self, addr),
-        }
-    }
-
-    pub fn cpu_write(&mut self, addr: u16, v: u8) {
-        match self.mapper {
-            Mapper::NROM => NROM::new().cpu_write(self, addr, v),
-        }
-    }
-
-    pub fn ppu_read(&mut self, addr: u16) -> u8 {
-        match self.mapper {
-            Mapper::NROM => NROM::new().ppu_read(self, addr),
-        }
-    }
-
-    pub fn ppu_write(&mut self, addr: u16, v: u8) {
-        match self.mapper {
-            Mapper::NROM => NROM::new().ppu_write(self, addr, v),
-        }
-    }
-
-    pub fn reset(&mut self) {}
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -260,11 +210,13 @@ pub enum TvSystem {
     Dual,
 }
 
-trait MapperTrait {
-    fn cpu_read(&self, cart: &mut Cart, addr: u16) -> u8;
-    fn cpu_inspect(&self, cart: &Cart, addr: u16) -> u8;
-    fn cpu_write(&self, cart: &mut Cart, addr: u16, v: u8);
-    fn ppu_read(&self, cart: &mut Cart, addr: u16) -> u8;
-    fn ppu_write(&self, cart: &mut Cart, addr: u16, v: u8);
-    fn reset(&self, cart: &mut Cart);
+pub trait Cart {
+    fn mirroring(&self) -> Mirroring;
+    fn cpu_read(&mut self, addr: u16) -> u8;
+    fn cpu_inspect(&self, addr: u16) -> u8;
+    fn cpu_write(&mut self, addr: u16, v: u8);
+    fn ppu_read(&mut self, addr: u16) -> u8;
+    fn ppu_write(&mut self, addr: u16, v: u8);
+    fn reset(&mut self);
+    fn box_cloned(&self) -> Box<dyn Cart>;
 }

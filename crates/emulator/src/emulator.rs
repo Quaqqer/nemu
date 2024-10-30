@@ -7,15 +7,28 @@ use crate::{
     ppu::{Display, Ppu, PpuCtrl},
 };
 
-#[derive(Clone)]
 pub struct Emulator {
     pub cpu: Cpu,
     pub apu: Apu,
     pub ppu: Ppu,
-    pub cart: Cart,
+    pub cart: Box<dyn Cart>,
     pub controllers: [NesController; 2],
     pub controller_shifters: [u8; 2],
     pub ram: [u8; 0x800],
+}
+
+impl Clone for Emulator {
+    fn clone(&self) -> Self {
+        Self {
+            cpu: self.cpu.clone(),
+            apu: self.apu.clone(),
+            ppu: self.ppu.clone(),
+            cart: self.cart.box_cloned(),
+            controllers: self.controllers.clone(),
+            controller_shifters: self.controller_shifters.clone(),
+            ram: self.ram.clone(),
+        }
+    }
 }
 
 impl Emulator {
@@ -54,7 +67,7 @@ impl Emulator {
             cpu.nmi_interrupt(&mut NesCpuBus {
                 apu,
                 ppu,
-                cart,
+                cart: cart.as_mut(),
                 controllers,
                 controller_shifters: controller_states,
                 ram,
@@ -65,14 +78,14 @@ impl Emulator {
         let cpu_cycles = cpu.tick(&mut NesCpuBus {
             apu,
             ppu,
-            cart,
+            cart: cart.as_mut(),
             controllers,
             controller_shifters: controller_states,
             ram,
         });
 
         for _ in 0..cpu_cycles * 3 {
-            ppu.cycle(cart);
+            ppu.cycle(cart.as_mut());
         }
         did_nmi
     }
@@ -81,7 +94,7 @@ impl Emulator {
         self.ppu.display()
     }
 
-    pub fn new(cart: Cart) -> Self {
+    pub fn new(cart: Box<dyn Cart>) -> Self {
         let mut emu = Self {
             cpu: Cpu::new(),
             apu: Apu::new(),
@@ -105,7 +118,7 @@ impl Emulator {
         cpu.init(&mut NesCpuBus {
             apu,
             ppu,
-            cart,
+            cart: cart.as_mut(),
             controllers,
             controller_shifters: controller_states,
             ram,
