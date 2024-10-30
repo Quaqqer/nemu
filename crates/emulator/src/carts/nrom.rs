@@ -6,7 +6,6 @@ pub struct NROM {
     pub prg_rom: Vec<u8>,
     pub prg_ram: Vec<u8>,
     pub chr_rom: Vec<u8>,
-    pub chr_ram: Vec<u8>,
 }
 
 impl Cart for NROM {

@@ -178,7 +178,6 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Box<dyn Cart>> {
             prg_rom,
             prg_ram: vec![0x00; 0x2000],
             chr_rom,
-            chr_ram: vec![],
         }),
         _ => {
             eprintln!("Mapper number {} not implemented", mapper_number);
