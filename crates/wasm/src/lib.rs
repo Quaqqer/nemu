@@ -1,9 +1,4 @@
-use nemu_emulator::{
-    carts::{read_rom, Cart},
-    controller::NesController,
-    emulator::Emulator,
-    ppu,
-};
+use nemu_emulator::{carts::read_rom, controller::NesController, emulator::Emulator, ppu};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -13,10 +8,10 @@ struct Nemu {
 
 #[wasm_bindgen]
 impl Nemu {
-    pub fn new(bin: &[u8]) -> Option<Nemu> {
-        let cart = read_rom(bin)?;
+    pub fn new(bin: &[u8]) -> Result<Nemu, String> {
+        let cart = read_rom(bin).map_err(|e| e.to_string())?;
 
-        Some(Self {
+        Ok(Self {
             emulator: Emulator::new(cart),
         })
     }

@@ -1,6 +1,8 @@
+use anyhow::{anyhow, bail, ensure, Result};
 use bitfield_struct::bitfield;
 use nrom::NROM;
 
+mod mmc1;
 mod nrom;
 
 #[bitfield(u128)]
@@ -125,13 +127,19 @@ struct INes2Header {
     _unused: u8,
 }
 
-pub fn read_rom(bin: &[u8]) -> Option<Box<dyn Cart>> {
-    let header_bytes = u128::from_le_bytes(TryInto::<[u8; 16]>::try_into(&bin[0..16]).ok()?);
+pub fn read_rom(bin: &[u8]) -> Result<Box<dyn Cart>> {
+    let header_bytes = u128::from_le_bytes(
+        TryInto::<[u8; 16]>::try_into(&bin[0..16])
+            .map_err(|_| anyhow!("Failed to read header bytes"))?,
+    );
 
     // Read Nes1 format
     let header = INes1Header::from_bits(header_bytes);
 
-    if header.nes2() == 2 {}
+    ensure!(
+        header.magic_bytes().to_le_bytes() == [0x4E, 0x45, 0x53, 0x1A],
+        "Missing magic bytes, is this really a NES rom?"
+    );
 
     if header.nes2() == 2 {
         let header = INes2Header::from_bits(header_bytes);
@@ -141,11 +149,11 @@ pub fn read_rom(bin: &[u8]) -> Option<Box<dyn Cart>> {
     }
 }
 
-fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Box<dyn Cart>> {
+fn read_ines1(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     let mut i = 16;
 
     let _trainer = if header.trainer() {
-        let v = Some(Vec::from(bin.get(i..i + 512)?));
+        let v = Some(Vec::from(bin.get(i..i + 512).ok_or(anyhow!(""))?));
         i += 512;
         v
     } else {
@@ -153,16 +161,21 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Box<dyn Cart>> {
     };
 
     let prg_rom_size = header.prg_rom_n() as usize * 0x4000;
-    let prg_rom = Vec::from(bin.get(i..i + prg_rom_size)?);
+    let prg_rom = Vec::from(
+        bin.get(i..i + prg_rom_size)
+            .ok_or_else(|| anyhow!("Failed to read prg rom bytes"))?,
+    );
     i += prg_rom_size;
 
     let chr_rom_size = header.chr_rom_n() as usize * 0x2000;
-    let chr_rom = Vec::from(bin.get(i..i + chr_rom_size)?);
+    let chr_rom = Vec::from(
+        bin.get(i..i + chr_rom_size)
+            .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
+    );
     i += prg_rom_size;
 
     if header.playchoice_10() {
-        eprintln!("Playchoice 10 is unsupported");
-        return None;
+        bail!("Playchoice 10 is unsupported");
     }
 
     let mirroring = match !header.horizontal_mirroring() {
@@ -172,23 +185,19 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Option<Box<dyn Cart>> {
 
     let mapper_number = header.mapper_number_upper() << 4 | header.mapper_number_lower();
 
-    Some(match mapper_number {
+    Ok(match mapper_number {
         0 => Box::new(NROM {
             mirroring,
             prg_rom,
             prg_ram: vec![0x00; 0x2000],
             chr_rom,
         }),
-        _ => {
-            eprintln!("Mapper number {} not implemented", mapper_number);
-            return None;
-        }
+        _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
 
-fn read_ines2(bin: &[u8], header: INes2Header) -> Option<Box<dyn Cart>> {
-    eprintln!("iNES 2 roms not supported yet");
-    None
+fn read_ines2(bin: &[u8], header: INes2Header) -> Result<Box<dyn Cart>> {
+    bail!("iNES2 roms are not supported yet.")
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

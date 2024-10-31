@@ -16,6 +16,7 @@ wasm-bindgen = "0.2.84"
 # code size when deploying.
 console_error_panic_hook = "0.1.7"
 nemu-emulator = { version = "0.1.0", path = "../emulator" }
+anyhow = "1.0.91"
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3.34"
