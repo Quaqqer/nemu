@@ -37,6 +37,10 @@ impl Cart for NROM {
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
+        if self.chr_rom.is_empty() {
+            return 0;
+        }
+
         let i = addr as usize % self.chr_rom.len();
         self.chr_rom[i]
     }

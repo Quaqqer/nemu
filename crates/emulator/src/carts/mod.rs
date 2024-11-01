@@ -50,7 +50,7 @@ struct INes1Header {
 }
 
 #[bitfield(u128)]
-struct INes2Header {
+struct Nes2Header {
     // NES header 'NES<eof>'
     magic_bytes: u32,
 
@@ -61,12 +61,12 @@ struct INes2Header {
     chr_rom_lsb: u8,
 
     // Flags 6
-    vertical_mirroring: bool,
+    horizontal_mirroring: bool,
     battery: bool,
     trainer: bool,
     _alternate_nametable: bool,
     #[bits(4)]
-    mapper_number_nibble1: u8,
+    mapper_number_nibble1: u16,
 
     // Flags 7
     #[bits(2)]
@@ -75,11 +75,11 @@ struct INes2Header {
     #[bits(2)]
     nes2: u8,
     #[bits(4)]
-    mapper_number_nibble2: u8,
+    mapper_number_nibble2: u16,
 
     // Flags 8
     #[bits(4)]
-    mapper_number_nibble3: u8,
+    mapper_number_nibble3: u16,
     #[bits(4)]
     submapper: u8,
 
@@ -142,8 +142,8 @@ pub fn read_rom(bin: &[u8]) -> Result<Box<dyn Cart>> {
     );
 
     if header.nes2() == 2 {
-        let header = INes2Header::from_bits(header_bytes);
-        read_ines2(bin, header)
+        let header = Nes2Header::from_bits(header_bytes);
+        read_nes2(bin, header)
     } else {
         read_ines1(bin, header)
     }
@@ -153,7 +153,10 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     let mut i = 16;
 
     let _trainer = if header.trainer() {
-        let v = Some(Vec::from(bin.get(i..i + 512).ok_or(anyhow!(""))?));
+        let v = Some(Vec::from(
+            bin.get(i..i + 512)
+                .ok_or(anyhow!("Failed to read trainer bytes"))?,
+        ));
         i += 512;
         v
     } else {
@@ -196,8 +199,59 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     })
 }
 
-fn read_ines2(bin: &[u8], header: INes2Header) -> Result<Box<dyn Cart>> {
-    bail!("iNES2 roms are not supported yet.")
+fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
+    println!("Nes2 rom");
+    if header.console_type() != 0 {
+        bail!("This ROM is for an unsupported system");
+    }
+
+    let mut i = 16;
+
+    let _trainer = if header.trainer() {
+        let v = Some(Vec::from(
+            bin.get(i..i + 512)
+                .ok_or(anyhow!("Failed to get trainer bytes"))?,
+        ));
+        i += 512;
+        v
+    } else {
+        None
+    };
+
+    let prg_rom_size =
+        ((header.prg_rom_msb() as usize) << 4 | header.prg_rom_lsb() as usize) * 0x4000;
+    let prg_rom = Vec::from(
+        bin.get(i..i + prg_rom_size)
+            .ok_or_else(|| anyhow!("Failed to read prg rom bytes"))?,
+    );
+    i += prg_rom_size;
+
+    let chr_rom_size =
+        ((header.chr_rom_msb() as usize) << 4 | header.chr_rom_lsb() as usize) * 0x2000;
+    let chr_rom = Vec::from(
+        bin.get(i..i + chr_rom_size)
+            .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
+    );
+    i += prg_rom_size;
+
+    let mirroring = match !header.horizontal_mirroring() {
+        true => Mirroring::Horizontal,
+        false => Mirroring::Vertical,
+    };
+
+    let mapper_number = header.mapper_number_nibble3() << 8
+        | header.mapper_number_nibble2() << 4
+        | header.mapper_number_nibble1();
+
+    Ok(match mapper_number {
+        0 => Box::new(NROM {
+            mirroring,
+            prg_rom,
+            prg_ram: vec![0x00; 0x2000],
+            chr_rom,
+        }),
+        _ => bail!("Mapper number {} is not implemented yet", mapper_number),
+    })
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
