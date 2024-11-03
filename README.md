@@ -1,11 +1,9 @@
 # Nemu
 
-Nemu is my WIP nes emulator. Currently it can run Donkey Kong quite
-successfully, and at least the first levels in Super Mario Bros.
+Nemu is my WIP nes emulator. Currently it runs quite a few games.
 
-The emulator is able to run in the browser over at
-[Quaqqer.com/projects/nemu](https://quaqqer.com/projects/nemu), although the
-debugging features are missing there.
+The emulator running in the browser over at
+[Quaqqer.com/projects/nemu](https://quaqqer.com/projects/nemu).
 
 ![A video of Nemu running Donkey Kong](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/github/dk.gif)
 ![A screenshot of Nemu running Donkey Kong with debugging utilities](https://raw.githubusercontent.com/Quaqqer/nemu/master/.github/res/github/screenshot.png)
@@ -27,13 +25,17 @@ debugging features are missing there.
 
 ## Mappers
 
-Currently only [games running on mapper
-0](https://nesdir.github.io/mapper0.html) are supported. Different game carts
-have different internal wiring which must be emulated, at the moment I have
-only implemented one type of cart. Some games that should run are Donkey Kong,
-Super Mario Bros 1, and Ice Climber.
+Different games for the NES use different types of cartridges. These cartridges
+have different internal wirings which must be emulated as well, hence every
+single type of cartridge must be implemented correctly to support all NES
+games. The implementations of these cartridges are referred to as mappers.
 
-- [x] Mapper 0
+- [x] [Mapper 0](https://nesdir.github.io/mapper0.html)
+- [ ] [Mapper 1](https://nesdir.github.io/mapper1.html)
+- [x] [Mapper 2](https://nesdir.github.io/mapper2.html)
+- [x] [Mapper 3](https://nesdir.github.io/mapper3.html)
+- [ ] [Mapper 4](https://nesdir.github.io/mapper4.html)
+- [ ] ...
 
 ## Acknowledgements
 
