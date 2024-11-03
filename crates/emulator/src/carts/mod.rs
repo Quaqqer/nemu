@@ -1,9 +1,10 @@
 use anyhow::{anyhow, bail, ensure, Result};
 use bitfield_struct::bitfield;
 use nrom::NROM;
+use uxrom::UxROM;
 
-mod mmc1;
 mod nrom;
+mod uxrom;
 
 #[bitfield(u128)]
 struct INes1Header {
@@ -145,11 +146,11 @@ pub fn read_rom(bin: &[u8]) -> Result<Box<dyn Cart>> {
         let header = Nes2Header::from_bits(header_bytes);
         read_nes2(bin, header)
     } else {
-        read_ines1(bin, header)
+        read_ines(bin, header)
     }
 }
 
-fn read_ines1(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
+fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     let mut i = 16;
 
     let _trainer = if header.trainer() {
@@ -171,10 +172,14 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     i += prg_rom_size;
 
     let chr_rom_size = header.chr_rom_n() as usize * 0x2000;
-    let chr_rom = Vec::from(
-        bin.get(i..i + chr_rom_size)
-            .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
-    );
+    let chr_rom = if chr_rom_size == 0 {
+        vec![0x00; 0x2000]
+    } else {
+        Vec::from(
+            bin.get(i..i + chr_rom_size)
+                .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
+        )
+    };
     i += prg_rom_size;
 
     if header.playchoice_10() {
@@ -189,18 +194,13 @@ fn read_ines1(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     let mapper_number = header.mapper_number_upper() << 4 | header.mapper_number_lower();
 
     Ok(match mapper_number {
-        0 => Box::new(NROM {
-            mirroring,
-            prg_rom,
-            prg_ram: vec![0x00; 0x2000],
-            chr_rom,
-        }),
+        0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
+        2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
 
 fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
-    println!("Nes2 rom");
     if header.console_type() != 0 {
         bail!("This ROM is for an unsupported system");
     }
@@ -228,10 +228,14 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
 
     let chr_rom_size =
         ((header.chr_rom_msb() as usize) << 4 | header.chr_rom_lsb() as usize) * 0x2000;
-    let chr_rom = Vec::from(
-        bin.get(i..i + chr_rom_size)
-            .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
-    );
+    let chr_rom = if chr_rom_size == 0 {
+        vec![0x00; 0x2000]
+    } else {
+        Vec::from(
+            bin.get(i..i + chr_rom_size)
+                .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
+        )
+    };
     i += prg_rom_size;
 
     let mirroring = match !header.horizontal_mirroring() {
@@ -244,17 +248,13 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
         | header.mapper_number_nibble1();
 
     Ok(match mapper_number {
-        0 => Box::new(NROM {
-            mirroring,
-            prg_rom,
-            prg_ram: vec![0x00; 0x2000],
-            chr_rom,
-        }),
+        0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
+        2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mirroring {
     Horizontal,
     Vertical,
