@@ -27,8 +27,8 @@ impl<'a> CpuMemory for NesCpuBus<'a> {
                 v
             }
             0x4017 => {
-                let v = (self.controller_shifters[0] & 0x80 != 0) as u8;
-                self.controller_shifters[0] <<= 1;
+                let v = (self.controller_shifters[1] & 0x80 != 0) as u8;
+                self.controller_shifters[1] <<= 1;
                 v
             }
             0x4018..=0x401F => {
@@ -76,7 +76,7 @@ impl<'a> CpuMemory for NesCpuBus<'a> {
                 self.controller_shifters[0] = self.controllers[0].bits();
             }
             0x4017 => {
-                self.controller_shifters[0] = self.controllers[0].bits();
+                self.controller_shifters[1] = self.controllers[1].bits();
             }
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")

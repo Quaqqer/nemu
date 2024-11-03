@@ -24,9 +24,9 @@ impl Clone for Emulator {
             apu: self.apu.clone(),
             ppu: self.ppu.clone(),
             cart: self.cart.box_cloned(),
-            controllers: self.controllers.clone(),
-            controller_shifters: self.controller_shifters.clone(),
-            ram: self.ram.clone(),
+            controllers: self.controllers,
+            controller_shifters: self.controller_shifters,
+            ram: self.ram,
         }
     }
 }
