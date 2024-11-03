@@ -1,8 +1,10 @@
 use anyhow::{anyhow, bail, ensure, Result};
 use bitfield_struct::bitfield;
+use cnrom::CNROM;
 use nrom::NROM;
 use uxrom::UxROM;
 
+mod cnrom;
 mod nrom;
 mod uxrom;
 
@@ -196,6 +198,7 @@ fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     Ok(match mapper_number {
         0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
         2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
+        3 => Box::new(CNROM::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
@@ -250,6 +253,7 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
     Ok(match mapper_number {
         0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
         2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
+        3 => Box::new(CNROM::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
