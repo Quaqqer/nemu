@@ -39,7 +39,7 @@ impl Cart for CNROM {
         match addr {
             0x0000..=0x7FFF => {}
             0x8000..=0xFFFF => {
-                self.bank = v & 0x0F;
+                self.bank = v & 0x03;
             }
         }
     }
