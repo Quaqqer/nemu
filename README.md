@@ -31,7 +31,7 @@ single type of cartridge must be implemented correctly to support all NES
 games. The implementations of these cartridges are referred to as mappers.
 
 - [x] [Mapper 0](https://nesdir.github.io/mapper0.html)
-- [ ] [Mapper 1](https://nesdir.github.io/mapper1.html)
+- [-] [Mapper 1](https://nesdir.github.io/mapper1.html)
 - [x] [Mapper 2](https://nesdir.github.io/mapper2.html)
 - [x] [Mapper 3](https://nesdir.github.io/mapper3.html)
 - [ ] [Mapper 4](https://nesdir.github.io/mapper4.html)

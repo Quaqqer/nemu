@@ -646,6 +646,7 @@ impl Ppu {
                         3 => self.vram[0x400 + $addr as usize],
                         _ => unreachable!(),
                     },
+                    crate::carts::Mirroring::Single => self.vram[$addr as usize],
                 }
             }};
         }
@@ -692,6 +693,7 @@ impl Ppu {
                         3 => &mut self.vram[0x400 + $addr as usize],
                         _ => unreachable!(),
                     },
+                    crate::carts::Mirroring::Single => &mut self.vram[$addr as usize],
                 };
                 *p = v;
             }};
