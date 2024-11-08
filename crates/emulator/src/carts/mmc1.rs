@@ -120,8 +120,14 @@ impl Cart for MMC1 {
                         match addr {
                             0x0000..=0x7FFF => unreachable!(),
                             0x8000..=0x9FFF => self.reg_control = MMC1Control::from(self.reg_load),
-                            0xA000..=0xBFFF => self.reg_chr_bank0 = self.reg_load,
-                            0xC000..=0xDFFF => self.reg_chr_bank1 = self.reg_load,
+                            0xA000..=0xBFFF => {
+                                let n_chr_banks = self.chr_rom.len() / 0x1000;
+                                self.reg_chr_bank0 = self.reg_load % n_chr_banks as u8;
+                            }
+                            0xC000..=0xDFFF => {
+                                let n_chr_banks = self.chr_rom.len() / 0x1000;
+                                self.reg_chr_bank1 = self.reg_load % n_chr_banks as u8;
+                            }
                             0xE000..=0xFFFF => self.reg_prg_bank = self.reg_load,
                         }
 
