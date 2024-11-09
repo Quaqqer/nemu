@@ -2,6 +2,8 @@ use bitflags::bitflags;
 
 use crate::carts::Cart;
 
+const SPRITE_LIMIT: bool = false;
+
 #[derive(Clone, Copy)]
 pub struct PpuCtrl(u8);
 
@@ -371,7 +373,10 @@ impl Ppu {
                             if (0..sprite_h).contains(&diff) {
                                 if self.sprite_scanline.len() == 8 {
                                     self.ppustatus |= PpuStatus::SPRITE_OVERFLOW;
-                                    break;
+
+                                    if SPRITE_LIMIT {
+                                        break;
+                                    }
                                 }
 
                                 self.sprite_scanline.push([b0, b1, b2, b3]);
