@@ -1,8 +1,6 @@
 use bitflags::bitflags;
 
-use crate::carts::Cart;
-
-const SPRITE_LIMIT: bool = false;
+use crate::{carts::Cart, config::NemuConfig};
 
 #[derive(Clone, Copy)]
 pub struct PpuCtrl(u8);
@@ -332,7 +330,7 @@ impl Ppu {
         self.odd = false;
     }
 
-    pub fn cycle(&mut self, cart: &mut dyn Cart) {
+    pub fn cycle(&mut self, cart: &mut dyn Cart, config: &NemuConfig) {
         match self.scanline {
             // Visible scanlines and pre-render scanline
             0..240 | 261 => {
@@ -374,7 +372,7 @@ impl Ppu {
                                 if self.sprite_scanline.len() == 8 {
                                     self.ppustatus |= PpuStatus::SPRITE_OVERFLOW;
 
-                                    if SPRITE_LIMIT {
+                                    if !config.override_sprite_limit {
                                         break;
                                     }
                                 }
@@ -633,7 +631,7 @@ impl Ppu {
         }
     }
 
-    fn read_mem(&mut self, cart: &mut dyn Cart, addr: u16) -> u8 {
+    pub fn inspect_mem(&self, cart: &dyn Cart, addr: u16) -> u8 {
         macro_rules! read_nametable {
             ($n:expr, $addr:expr) => {{
                 match cart.mirroring() {
@@ -658,7 +656,7 @@ impl Ppu {
 
         match addr % 0x4000 {
             // Pattern tables
-            0x0000..0x2000 => cart.ppu_read(addr),
+            0x0000..0x2000 => cart.ppu_inspect(addr),
             // Name tables
             0x2000..=0x23FF => read_nametable!(0, addr - 0x2000),
             0x2400..=0x27FF => read_nametable!(1, addr - 0x2400),
@@ -677,6 +675,13 @@ impl Ppu {
             }
 
             _ => unreachable!(),
+        }
+    }
+
+    fn read_mem(&self, cart: &mut dyn Cart, addr: u16) -> u8 {
+        match addr {
+            0x0000..0x2000 => cart.ppu_read(addr),
+            _ => self.inspect_mem(cart, addr),
         }
     }
 

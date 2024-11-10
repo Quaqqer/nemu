@@ -282,6 +282,7 @@ pub trait Cart {
     fn cpu_inspect(&self, addr: u16) -> u8;
     fn cpu_write(&mut self, addr: u16, v: u8);
     fn ppu_read(&mut self, addr: u16) -> u8;
+    fn ppu_inspect(&self, addr: u16) -> u8;
     fn ppu_write(&mut self, addr: u16, v: u8);
     fn reset(&mut self);
     fn box_cloned(&self) -> Box<dyn Cart>;

@@ -1,23 +1,28 @@
-use nemu_emulator::{carts::read_rom, controller::NesController, emulator::Emulator, ppu};
+use nemu_emulator::{
+    carts::read_rom, config::NemuConfig, controller::NesController, emulator::Emulator, ppu,
+};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
 struct Nemu {
     emulator: Emulator,
+    config: NemuConfig,
 }
 
 #[wasm_bindgen]
 impl Nemu {
     pub fn new(bin: &[u8]) -> Result<Nemu, String> {
         let cart = read_rom(bin).map_err(|e| e.to_string())?;
+        let config = NemuConfig::default();
 
         Ok(Self {
             emulator: Emulator::new(cart),
+            config,
         })
     }
 
     pub fn next_frame(&mut self) -> Vec<u8> {
-        self.emulator.step_frame();
+        self.emulator.step_frame(&self.config);
         let disp = self.emulator.ppu.display();
 
         let mut buf = Vec::new();

@@ -140,6 +140,10 @@ impl Cart for MMC1 {
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
+        self.ppu_inspect(addr)
+    }
+
+    fn ppu_inspect(&self, addr: u16) -> u8 {
         if self.reg_control.chr_rom_bank_mode() {
             match addr {
                 0x0000..=0x0FFF => {
@@ -151,7 +155,6 @@ impl Cart for MMC1 {
                 _ => unreachable!(),
             }
         } else {
-            // TODO: Should this be multiplied by 0x1000 or 0x2000?
             self.chr_rom[self.reg_chr_bank0 as usize * 0x1000 + addr as usize]
         }
     }
@@ -168,7 +171,6 @@ impl Cart for MMC1 {
                 _ => unreachable!(),
             }
         } else {
-            // TODO: Should this be multiplied by 0x1000 or 0x2000?
             self.chr_rom[self.reg_chr_bank0 as usize * 0x1000 + addr as usize] = v;
         }
     }

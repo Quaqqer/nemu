@@ -61,8 +61,9 @@ impl<'a> CpuMemory for NesCpuBus<'a> {
             0x4014 => {
                 // Perform OAM DMA
 
-                // Either 513 or 514 depending if on a put or write cycle, hard to implement
-                cpu.cyc += 514;
+                // Inaccuracy: Either 513 or 514 depending if on a put or write
+                // cycle, hard to implement, so we always increment with 514
+                cpu.cyc += 513;
                 let mut mem_i = (val as u16) << 8;
                 for i in 0..256 {
                     self.ppu.oam[i] = self.read(cpu, mem_i);

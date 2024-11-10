@@ -1,6 +1,7 @@
 use crate::{
     apu::Apu,
     carts::Cart,
+    config::NemuConfig,
     controller::NesController,
     cpu::Cpu,
     nes_cpu_bus::NesCpuBus,
@@ -32,15 +33,15 @@ impl Clone for Emulator {
 }
 
 impl Emulator {
-    pub fn step_frame(&mut self) {
-        while !self.step() {}
+    pub fn step_frame(&mut self, config: &NemuConfig) {
+        while !self.step(config) {}
     }
 
-    pub fn step_scanline(&mut self) {
+    pub fn step_scanline(&mut self, config: &NemuConfig) {
         let start = self.ppu.scanline;
 
         while self.ppu.scanline == start {
-            self.step();
+            self.step(config);
         }
     }
 
@@ -51,7 +52,7 @@ impl Emulator {
         self.cart.reset();
     }
 
-    pub fn step(&mut self) -> bool {
+    pub fn step(&mut self, config: &NemuConfig) -> bool {
         let Emulator {
             cpu,
             apu,
@@ -85,7 +86,7 @@ impl Emulator {
         });
 
         for _ in 0..cpu_cycles * 3 {
-            ppu.cycle(cart.as_mut());
+            ppu.cycle(cart.as_mut(), config);
         }
         did_nmi
     }

@@ -1,5 +1,6 @@
 use super::{Cart, Mirroring};
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct CNROM {
     mirroring: Mirroring,
@@ -45,6 +46,10 @@ impl Cart for CNROM {
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
+        self.ppu_inspect(addr)
+    }
+
+    fn ppu_inspect(&self, addr: u16) -> u8 {
         let i = self.bank as usize * 0x2000 + addr as usize % self.chr_rom.len();
         self.chr_rom[i]
     }

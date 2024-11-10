@@ -54,6 +54,10 @@ impl Cart for UxROM {
     }
 
     fn ppu_read(&mut self, addr: u16) -> u8 {
+        self.ppu_inspect(addr)
+    }
+
+    fn ppu_inspect(&self, addr: u16) -> u8 {
         let i = addr as usize % self.chr_rom.len();
         self.chr_rom[i]
     }
