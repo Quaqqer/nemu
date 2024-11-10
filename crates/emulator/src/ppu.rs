@@ -70,13 +70,13 @@ impl std::fmt::Display for PpuMask {
 #[bitfield(u16)]
 pub struct LoopyRegister {
     #[bits(5)]
-    coarse_x: u8,
+    pub coarse_x: u8,
     #[bits(5)]
-    coarse_y: u8,
+    pub coarse_y: u8,
     #[bits(2)]
-    nametable: u8,
+    pub nametable: u8,
     #[bits(3)]
-    fine_y: u8,
+    pub fine_y: u8,
     _unused: bool,
 }
 
@@ -808,10 +808,10 @@ impl Ppu {
             | (self.v.coarse_y() as u16 & 0b1_1100) << 1
             | (self.v.coarse_x() as u16 & 0b1_1100) >> 2;
         let mut attr = self.read_mem(cart, attr_addr);
-        if self.coarse_y() & 0x02 != 0 {
+        if self.v.coarse_y() & 0x02 != 0 {
             attr >>= 4;
         }
-        if self.coarse_x() & 0x02 != 0 {
+        if self.v.coarse_x() & 0x02 != 0 {
             attr >>= 2;
         }
         attr &= 0x03;
@@ -823,7 +823,7 @@ impl Ppu {
             cart,
             (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
                 | (self.bg_next_nt as u16) << 4
-                | (self.fine_y() as u16 + 0),
+                | (self.v.fine_y() as u16 + 0),
         )
     }
 
@@ -832,12 +832,8 @@ impl Ppu {
             cart,
             (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
                 | (self.bg_next_nt as u16) << 4
-                | (self.fine_y() as u16 + 8),
+                | (self.v.fine_y() as u16 + 8),
         )
-    }
-
-    pub fn fine_y(&self) -> u8 {
-        self.v.fine_y()
     }
 
     fn inc_fine_y(&mut self) {
@@ -885,14 +881,6 @@ impl Ppu {
                 self.v.set_coarse_x(self.v.coarse_x() + 1);
             }
         }
-    }
-
-    pub fn coarse_x(&self) -> u16 {
-        self.v.coarse_x().into()
-    }
-
-    pub fn coarse_y(&self) -> u16 {
-        self.v.coarse_y().into()
     }
 
     pub fn fine_x(&self) -> u8 {

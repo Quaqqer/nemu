@@ -524,11 +524,11 @@ impl NemuApp {
                     ui.end_row();
 
                     ui.label("Coarse x");
-                    ui.label(format!("{}", ppu.coarse_x()));
+                    ui.label(format!("{}", ppu.v.coarse_x()));
                     ui.end_row();
 
                     ui.label("Coarse y");
-                    ui.label(format!("{}", ppu.coarse_y()));
+                    ui.label(format!("{}", ppu.v.coarse_y()));
                     ui.end_row();
 
                     ui.label("Fine x");
@@ -536,7 +536,7 @@ impl NemuApp {
                     ui.end_row();
 
                     ui.label("Fine y");
-                    ui.label(format!("{}", ppu.fine_y()));
+                    ui.label(format!("{}", ppu.v.fine_y()));
                     ui.end_row();
                 });
             });
