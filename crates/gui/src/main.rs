@@ -508,11 +508,11 @@ impl NemuApp {
                     ui.end_row();
 
                     ui.label("T");
-                    ui.label(format!("{:#04x}", ppu.t));
+                    ui.label(format!("{:#04x}", ppu.t.into_bits()));
                     ui.end_row();
 
                     ui.label("V");
-                    ui.label(format!("{:#04x}", ppu.v));
+                    ui.label(format!("{:#04x}", ppu.v.into_bits()));
                     ui.end_row();
 
                     ui.label("Scanline");

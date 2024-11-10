@@ -1,3 +1,4 @@
+use bitfield_struct::bitfield;
 use bitflags::bitflags;
 
 use crate::{carts::Cart, config::NemuConfig};
@@ -66,6 +67,19 @@ impl std::fmt::Display for PpuMask {
     }
 }
 
+#[bitfield(u16)]
+pub struct LoopyRegister {
+    #[bits(5)]
+    coarse_x: u8,
+    #[bits(5)]
+    coarse_y: u8,
+    #[bits(2)]
+    nametable: u8,
+    #[bits(3)]
+    fine_y: u8,
+    _unused: bool,
+}
+
 #[derive(Clone, Copy)]
 pub struct PpuStatus(u8);
 bitflags! {
@@ -96,8 +110,8 @@ pub struct Ppu {
     pub ppustatus: PpuStatus,
     oamaddr: u8,
     latch_toggle: bool,
-    pub t: u16,
-    pub v: u16,
+    pub t: LoopyRegister,
+    pub v: LoopyRegister,
     oamdma: u8,
 
     // Current PPU position
@@ -142,8 +156,8 @@ impl Ppu {
             ppustatus: PpuStatus::SPRITE_OVERFLOW | PpuStatus::VBLANK,
             oamaddr: 0x00,
             latch_toggle: false,
-            t: 0x0000,
-            v: 0x0000,
+            t: LoopyRegister::from(0x0000),
+            v: LoopyRegister::from(0x0000),
             oamdma: 0x00,
 
             vram: [0x00; 0x800],
@@ -231,8 +245,12 @@ impl Ppu {
                 7 => {
                     // TODO: Some stuff should be done different here apparently
                     let read = self.ppudata_read;
-                    self.ppudata_read = self.read_mem(cart, self.v);
-                    self.v = self.v.wrapping_add(self.ppudata_increase());
+                    self.ppudata_read = self.read_mem(cart, self.v.into_bits());
+                    self.v = self
+                        .v
+                        .into_bits()
+                        .wrapping_add(self.ppudata_increase())
+                        .into();
                     read
                 }
                 _ => unreachable!(),
@@ -258,8 +276,7 @@ impl Ppu {
                 // Control
                 0 => {
                     self.ppuctrl = PpuCtrl::from_bits(v).unwrap();
-                    self.t &= !(0b11 << 10);
-                    self.t |= (v as u16 & 0b11) << 10;
+                    self.t.set_nametable(v & 0x3);
                 }
                 // Mask
                 1 => self.ppumask = PpuMask::from_bits(v).unwrap(),
@@ -279,35 +296,40 @@ impl Ppu {
                         self.fine_x = v & 0b111;
 
                         // Set coarse x
-                        self.t &= !(0b11111);
-                        self.t |= v as u16 >> 3;
+                        self.t.set_coarse_x((v >> 3) & 0x1F);
                     } else {
                         // Set coarse y
-                        self.t &= !(0b11111 << 5);
-                        self.t |= ((v as u16 >> 3) & 0b11111) << 5;
+                        self.t.set_coarse_y((v >> 3) & 0x1F);
 
                         // Set fine y
-                        self.t &= !(0b111 << 12);
-                        self.t |= (v as u16 & 0b111) << 12;
+                        self.t.set_fine_y(v & 0x7);
                     }
                     self.latch_toggle ^= true;
                 }
                 // Addr
                 6 => {
                     if !self.latch_toggle {
-                        self.t &= !(0b1111111 << 8);
-                        self.t |= (v as u16 & 0b111111) << 8;
+                        let mut t = self.t.into_bits();
+                        t &= !(0b11_11111 << 8);
+                        t |= (v as u16 & 0b11_1111) << 8;
+                        self.t = LoopyRegister::from_bits(t);
                     } else {
-                        self.t &= !0xFF;
-                        self.t |= v as u16;
+                        let mut t = self.t.into_bits();
+                        t &= !0xFF;
+                        t |= v as u16;
+                        self.t = LoopyRegister::from_bits(t);
                         self.v = self.t;
                     }
                     self.latch_toggle ^= true;
                 }
                 // Data
                 7 => {
-                    self.write_mem(cart, self.v, v);
-                    self.v = self.v.wrapping_add(self.ppudata_increase());
+                    self.write_mem(cart, self.v.into_bits(), v);
+                    self.v = self
+                        .v
+                        .into_bits()
+                        .wrapping_add(self.ppudata_increase())
+                        .into();
                 }
                 _ => unreachable!(),
             }
@@ -324,7 +346,7 @@ impl Ppu {
     pub fn reset(&mut self) {
         self.ppuctrl = PpuCtrl::empty();
         self.ppumask = PpuMask::empty();
-        self.t = 0x0000;
+        self.t = LoopyRegister::from_bits(0x0000);
         self.latch_toggle = false;
 
         self.odd = false;
@@ -776,13 +798,15 @@ impl Ppu {
     }
 
     fn fetch_nt(&mut self, cart: &mut dyn Cart) -> u8 {
-        let nt_addr = 0x2000 | (self.v & 0x0FFF);
+        let nt_addr = 0x2000 | (self.v.into_bits() & 0x0FFF);
         self.read_mem(cart, nt_addr)
     }
 
     fn fetch_at(&mut self, cart: &mut dyn Cart) -> u8 {
-        let attr_addr =
-            0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07);
+        let attr_addr: u16 = 0x23C0
+            | (self.v.nametable() as u16) << 10
+            | (self.v.coarse_y() as u16 & 0b1_1100) << 1
+            | (self.v.coarse_x() as u16 & 0b1_1100) >> 2;
         let mut attr = self.read_mem(cart, attr_addr);
         if self.coarse_y() & 0x02 != 0 {
             attr >>= 4;
@@ -813,7 +837,7 @@ impl Ppu {
     }
 
     pub fn fine_y(&self) -> u8 {
-        (self.v >> 12) as u8 & 0x7
+        self.v.fine_y()
     }
 
     fn inc_fine_y(&mut self) {
@@ -824,20 +848,23 @@ impl Ppu {
             return;
         }
 
-        if (self.v & 0x7000) != 0x7000 {
-            self.v += 0x1000;
+        if self.v.fine_y() < 7 {
+            self.v.set_fine_y((self.v.fine_y() + 1) & 0x7);
         } else {
-            self.v &= !0x7000;
-            let mut y = (self.v & 0x03E0) >> 5;
-            if y == 29 {
-                y = 0;
-                self.v ^= 0x0800;
-            } else if y == 31 {
-                y = 0;
-            } else {
-                y += 1;
+            self.v.set_fine_y(0);
+
+            match self.v.coarse_y() {
+                29 => {
+                    self.v.set_coarse_y(0);
+                    self.v.set_nametable(self.v.nametable() ^ 0x2);
+                }
+                31 => {
+                    self.v.set_coarse_y(0);
+                }
+                _ => {
+                    self.v.set_coarse_y(self.v.coarse_y() + 1);
+                }
             }
-            self.v = (self.v & !0x03E0) | (y << 5);
         }
     }
 
@@ -849,20 +876,23 @@ impl Ppu {
             return;
         }
 
-        if (self.v & 0x001F) == 31 {
-            self.v &= !0x0001F;
-            self.v ^= 0x0400;
-        } else {
-            self.v += 1;
+        match self.v.coarse_x() {
+            31 => {
+                self.v.set_coarse_x(0);
+                self.v.set_nametable(self.v.nametable() ^ 0x1);
+            }
+            _ => {
+                self.v.set_coarse_x(self.v.coarse_x() + 1);
+            }
         }
     }
 
     pub fn coarse_x(&self) -> u16 {
-        self.v & 0x1F
+        self.v.coarse_x().into()
     }
 
     pub fn coarse_y(&self) -> u16 {
-        (self.v >> 5) & 0x1F
+        self.v.coarse_y().into()
     }
 
     pub fn fine_x(&self) -> u8 {
@@ -899,8 +929,9 @@ impl Ppu {
             return;
         }
 
-        self.v &= !(0x41f);
-        self.v |= self.t & (0x41f);
+        self.v
+            .set_nametable(self.v.nametable() & 0x2 | self.t.nametable() & 0x1);
+        self.v.set_coarse_x(self.t.coarse_x());
     }
 
     fn transfer_y(&mut self) {
@@ -911,8 +942,10 @@ impl Ppu {
             return;
         }
 
-        self.v &= 0x41f;
-        self.v |= self.t & !(0x41f);
+        self.v
+            .set_nametable(self.t.nametable() & 0x2 | self.v.nametable() & 0x1);
+        self.v.set_fine_y(self.t.fine_y());
+        self.v.set_coarse_y(self.t.coarse_y());
     }
 }
 
@@ -985,7 +1018,7 @@ mod tests {
 
         // $2000 write
         ppu.cpu_write_register(cart, 0x2000, 0b00000000);
-        assert!(ppu.t & (0b11 << 10) == 0);
+        assert!(ppu.t.into_bits() & (0b11 << 10) == 0);
 
         // $2002 read
         ppu.cpu_read_register(cart, 0x2002);
@@ -993,24 +1026,24 @@ mod tests {
 
         // $2005 write 1
         ppu.cpu_write_register(cart, 0x2005, 0b01111101);
-        assert!(ppu.t & 0b11000011111 == 0b1111);
+        assert!(ppu.t.into_bits() & 0b11000011111 == 0b1111);
         assert!(ppu.fine_x == 0b101);
         assert!(ppu.latch_toggle);
 
         // $2005 write 2
         ppu.cpu_write_register(cart, 0x2005, 0b01011110);
-        assert!(ppu.t == 0b01100001_01101111);
+        assert!(ppu.t.into_bits() == 0b01100001_01101111);
         assert!(!ppu.latch_toggle);
 
         // $2006 write 1
         ppu.cpu_write_register(cart, 0x2006, 0b00111101);
-        assert!(ppu.t == 0b00111101_01101111);
+        assert!(ppu.t.into_bits() == 0b00111101_01101111);
         assert!(ppu.latch_toggle);
 
         // $2006 write 2
         ppu.cpu_write_register(cart, 0x2006, 0b11110000);
-        assert!(ppu.t == 0b00111101_11110000);
-        assert!(ppu.v == 0b00111101_11110000);
+        assert!(ppu.t.into_bits() == 0b00111101_11110000);
+        assert!(ppu.v.into_bits() == 0b00111101_11110000);
         assert!(!ppu.latch_toggle);
     }
 }
