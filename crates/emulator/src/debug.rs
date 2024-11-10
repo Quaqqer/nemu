@@ -44,6 +44,6 @@ pub fn get_nametable_entry(ppu: &Ppu, cart: &dyn Cart, nametable: usize, x: usiz
     ppu.inspect_mem(cart, 0x2000 + addr as u16)
 }
 
-pub fn get_attribute_table_entry(ppu: &Ppu, nametable: usize, x: usize, y: usize) -> u8 {
+pub fn get_attribute_table_entry(_ppu: &Ppu, _nametable: usize, _x: usize, _y: usize) -> u8 {
     todo!()
 }

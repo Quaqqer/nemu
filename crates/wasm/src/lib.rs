@@ -1,3 +1,7 @@
+// For some reason everything is considered unused when using wasm_bindgen, maybe because of the
+// target?
+#![allow(unused)]
+
 use nemu_emulator::{
     carts::read_rom, config::NemuConfig, controller::NesController, emulator::Emulator, ppu,
 };
