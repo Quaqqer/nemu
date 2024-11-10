@@ -47,9 +47,6 @@ jobs:
 
     runs-on: ubuntu-latest
 
-    env:
-      RUSTFLAGS: -DWarnings
-
     steps:
       - uses: actions/checkout@v4
 
@@ -61,4 +58,4 @@ jobs:
           rustup default nightly
           rustup component add clippy
       - name: Lint
-        run: cargo clippy --all-targets --all-features
+        run: cargo clippy --all-targets --all-features -- -Dwarnings
