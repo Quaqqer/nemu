@@ -15,7 +15,7 @@ pub struct NesCpuBus<'a> {
     pub controller_shifters: &'a mut [u8; 2],
 }
 
-impl<'a> CpuMemory for NesCpuBus<'a> {
+impl CpuMemory for NesCpuBus<'_> {
     fn read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],

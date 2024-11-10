@@ -1,5 +1,6 @@
 use super::{Cart, Mirroring};
 
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone)]
 pub struct NROM {
     mirroring: Mirroring,

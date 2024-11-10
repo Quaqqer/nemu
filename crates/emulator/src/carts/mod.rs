@@ -184,7 +184,7 @@ fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
                 .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
         )
     };
-    i += prg_rom_size;
+    // i += prg_rom_size;
 
     if header.playchoice_10() {
         bail!("Playchoice 10 is unsupported");
@@ -242,7 +242,7 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
                 .ok_or_else(|| anyhow!("Failed to read chr rom bytes"))?,
         )
     };
-    i += prg_rom_size;
+    // i += prg_rom_size;
 
     let mirroring = match !header.horizontal_mirroring() {
         true => Mirroring::Horizontal,

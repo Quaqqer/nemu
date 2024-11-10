@@ -3,10 +3,7 @@ mod tests {
     use crate::controller::NesController;
     use crate::nes_cpu_bus::NesCpuBus;
     use crate::{apu::Apu, ppu::Ppu};
-    use crate::{
-        carts::{read_rom, Cart},
-        cpu::Cpu,
-    };
+    use crate::{carts::read_rom, cpu::Cpu};
 
     #[derive(PartialEq)]
     struct LogEntry {

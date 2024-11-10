@@ -410,6 +410,7 @@ impl Ppu {
                                             | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
                                     }
                                 } else {
+                                    #[allow(clippy::collapsible_if)]
                                     if self.scanline.wrapping_sub(b0 as u16) < 8 {
                                         pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
                                             | (((b1 as u16) & 0xFE) << 4)

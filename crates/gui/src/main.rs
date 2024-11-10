@@ -13,7 +13,7 @@ use nemu_emulator::{
     cpu::{Cpu, CpuMemory},
     emulator::Emulator,
     nes_cpu_bus::NesCpuBus,
-    ppu::{PpuCtrl, PALETTE},
+    ppu::PALETTE,
 };
 
 fn main() {
@@ -581,7 +581,7 @@ impl NemuApp {
                                     let x = tile_x * 8 + dx;
                                     let y = tile_y * 8 + dy;
 
-                                    let base = ((y as usize * 128) + x as usize) * 3;
+                                    let base = ((y * 128) + x) * 3;
                                     buf[base] = color.r();
                                     buf[base + 1] = color.g();
                                     buf[base + 2] = color.b();
