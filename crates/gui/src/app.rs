@@ -14,7 +14,6 @@ pub(crate) struct NemuApp {
     // Emulator stuff
     pub(crate) emulator: Option<nemu_emulator::emulator::Emulator>,
     config: nemu_emulator::config::NemuConfig,
-    save_state: Option<nemu_emulator::emulator::Emulator>,
     pub(crate) save_states: Vec<Option<nemu_emulator::emulator::Emulator>>,
     pub(crate) paused: bool,
     tex: TextureHandle,
@@ -55,7 +54,6 @@ impl NemuApp {
         Self {
             emulator: None,
             config: Default::default(),
-            save_state: None,
             save_states: vec![None; 10],
             paused: false,
             tex,
@@ -168,16 +166,6 @@ impl eframe::App for NemuApp {
                         self.paused ^= true;
                         if self.paused {
                             self.prev_time = None;
-                        }
-                    }
-                    egui::Key::S => {
-                        if let Some(emu) = &self.emulator {
-                            self.save_state = Some(emu.clone());
-                        }
-                    }
-                    egui::Key::L => {
-                        if let Some(state) = &self.save_state {
-                            self.emulator = Some(state.clone());
                         }
                     }
                     egui::Key::M => {
