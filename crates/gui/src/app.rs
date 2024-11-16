@@ -4,9 +4,11 @@ use eframe::egui::{
     Ui,
 };
 use egui::Id;
-use nemu_emulator::controller::NesController;
 
-use crate::action::{Action, Toggleable};
+use crate::{
+    action::{Action, Toggleable},
+    map::{create_action_map, ActionMap},
+};
 
 mod debug;
 
@@ -24,8 +26,7 @@ pub(crate) struct NemuApp {
 
     unused_time: f64,
     pub(crate) prev_time: Option<std::time::Instant>,
-
-    menu_bar_root: MenuBarRoot,
+    action_map: ActionMap,
 }
 
 impl NemuApp {
@@ -75,8 +76,7 @@ impl NemuApp {
 
             unused_time: 0.,
             prev_time: None,
-
-            menu_bar_root: create_menu_bar(),
+            action_map: create_action_map(),
         }
     }
 
@@ -161,106 +161,20 @@ impl eframe::App for NemuApp {
             match ev {
                 egui::Event::Key {
                     key, pressed: true, ..
-                } => match key {
-                    egui::Key::P => {
-                        self.paused ^= true;
-                        if self.paused {
-                            self.prev_time = None;
-                        }
+                } => {
+                    if let Some((Some(action), _)) = self.action_map.get(key).cloned() {
+                        self.execute_action(&action)
                     }
-                    egui::Key::M => {
-                        self.selected_palette = (self.selected_palette + 1) % 8;
-                    }
-
-                    egui::Key::ArrowUp => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::UP;
-                        }
-                    }
-                    egui::Key::ArrowDown => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::DOWN;
-                        }
-                    }
-                    egui::Key::ArrowLeft => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::LEFT;
-                        }
-                    }
-                    egui::Key::ArrowRight => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::RIGHT;
-                        }
-                    }
-                    egui::Key::Enter => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::START;
-                        }
-                    }
-                    egui::Key::Backspace => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::SELECT;
-                        }
-                    }
-                    egui::Key::Z => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::B;
-                        }
-                    }
-                    egui::Key::X => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] |= NesController::A;
-                        }
-                    }
-                    _ => {}
-                },
+                }
                 egui::Event::Key {
                     key,
                     pressed: false,
                     ..
-                } => match key {
-                    egui::Key::ArrowUp => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::UP;
-                        }
+                } => {
+                    if let Some((_, Some(action))) = self.action_map.get(key).cloned() {
+                        self.execute_action(&action)
                     }
-                    egui::Key::ArrowDown => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::DOWN;
-                        }
-                    }
-                    egui::Key::ArrowLeft => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::LEFT;
-                        }
-                    }
-                    egui::Key::ArrowRight => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::RIGHT;
-                        }
-                    }
-                    egui::Key::Enter => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::START;
-                        }
-                    }
-                    egui::Key::Backspace => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::SELECT;
-                        }
-                    }
-                    egui::Key::Z => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::B;
-                        }
-                    }
-                    egui::Key::X => {
-                        if let Some(emu) = &mut self.emulator {
-                            emu.controllers[0] -= NesController::A;
-                        }
-                    }
-                    _ => {}
-                },
+                }
                 _ => {}
             }
         }
@@ -272,29 +186,11 @@ impl NemuApp {
         egui::menu::bar(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open").clicked() {
-                    let path = rfd::FileDialog::new()
-                        .add_filter("NES", &["nes"])
-                        .pick_file();
-
-                    if let Some(path) = path {
-                        self.execute_action(&Action::LoadRom {
-                            path,
-                            paused: false,
-                        });
-                    }
+                    self.execute_action(&Action::OpenRom { paused: false });
                 };
 
                 if ui.button("Open paused").clicked() {
-                    let path = rfd::FileDialog::new()
-                        .add_filter("NES", &["nes"])
-                        .pick_file();
-
-                    if let Some(path) = path {
-                        self.execute_action(&Action::LoadRom {
-                            path,
-                            paused: false,
-                        });
-                    }
+                    self.execute_action(&Action::OpenRom { paused: true });
                 };
             });
 
@@ -337,16 +233,16 @@ impl NemuApp {
 
             ui.menu_button("Debug", |ui| {
                 if ui.button("CPU").clicked() {
-                    self.debug.open_cpu ^= true;
+                    self.execute_action(&Action::Toggle(Toggleable::DebugCpu));
                 };
                 if ui.button("PPU").clicked() {
-                    self.debug.open_ppu ^= true;
+                    self.execute_action(&Action::Toggle(Toggleable::DebugPpu));
                 };
                 if ui.button("Pattern tables").clicked() {
-                    self.debug.open_pattern_tables ^= true;
+                    self.execute_action(&Action::Toggle(Toggleable::DebugPatternTable));
                 };
                 if ui.button("Nametables").clicked() {
-                    self.debug.open_nametables ^= true;
+                    self.execute_action(&Action::Toggle(Toggleable::DebugNameTable));
                 };
             });
         });
@@ -360,53 +256,5 @@ impl NemuApp {
             .set_description(error);
 
         m.show();
-    }
-}
-
-fn create_menu_bar() -> MenuBarRoot {
-    MenuBarRoot(vec![
-        (
-            "File".to_string(),
-            vec![MenuBar::CreateAction("Load ROM".to_string(), &|| {
-                let path = rfd::FileDialog::new()
-                    .add_filter("NES", &["nes"])
-                    .pick_file();
-
-                match path {
-                    Some(path) => Action::LoadRom {
-                        path,
-                        paused: false,
-                    },
-                    None => Action::Noop,
-                }
-            })],
-        ),
-        (
-            "Debug".to_string(),
-            vec![
-                MenuBar::Action(Action::Toggle(Toggleable::DebugCpu)),
-                MenuBar::Action(Action::Toggle(Toggleable::DebugPpu)),
-                MenuBar::Action(Action::Toggle(Toggleable::DebugNameTable)),
-                MenuBar::Action(Action::Toggle(Toggleable::DebugPatternTable)),
-            ],
-        ),
-    ])
-}
-
-pub struct MenuBarRoot(Vec<(String, Vec<MenuBar>)>);
-
-pub enum MenuBar {
-    List(String, Vec<(String, MenuBar)>),
-    Action(Action),
-    CreateAction(String, &'static dyn Fn() -> Action),
-}
-
-impl MenuBar {
-    fn name(&self) -> String {
-        match self {
-            MenuBar::List(n, _) => n.clone(),
-            MenuBar::Action(a) => a.name(),
-            MenuBar::CreateAction(n, _) => n.clone(),
-        }
     }
 }

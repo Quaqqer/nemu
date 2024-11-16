@@ -3,6 +3,7 @@
 
 mod action;
 mod app;
+mod map;
 
 use app::NemuApp;
 use eframe::egui::{self, Vec2};

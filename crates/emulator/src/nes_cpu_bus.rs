@@ -75,10 +75,9 @@ impl CpuMemory for NesCpuBus<'_> {
             }
             0x4016 => {
                 self.controller_shifters[0] = self.controllers[0].bits();
-            }
-            0x4017 => {
                 self.controller_shifters[1] = self.controllers[1].bits();
             }
+            0x4017 => {}
             0x4018..=0x401F => {
                 unimplemented!("APU and I/O functionality that is normally disabled.")
             }

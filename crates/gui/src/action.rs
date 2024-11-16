@@ -1,30 +1,43 @@
-use std::{
-    io::Read,
-    path::{Path, PathBuf},
-};
+use std::{io::Read, path::PathBuf};
+
+use nemu_emulator::controller::NesController;
 
 use crate::app::NemuApp;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
-    Noop,
+    OpenRom { paused: bool },
     LoadRom { path: PathBuf, paused: bool },
     SaveState(usize),
     LoadState(usize),
-    Resume,
-    Pause,
     Toggle(Toggleable),
+    ButtonDown { btn: NesButton, p2: bool },
+    ButtonUp { btn: NesButton, p2: bool },
+}
+
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub(crate) enum NesButton {
+    Right,
+    Left,
+    Down,
+    Up,
+    Start,
+    Select,
+    B,
+    A,
 }
 
 impl Action {
+    #[allow(unused)]
     pub(crate) fn name(&self) -> String {
         match self {
-            Action::Noop => "Do nothing".to_string(),
+            Action::OpenRom { paused } => match *paused {
+                true => "Open ROM paused".to_string(),
+                false => "Open ROM".to_string(),
+            },
             Action::LoadRom { path, .. } => format!("Load ROM {}", path.to_str().unwrap_or("?")),
             Action::SaveState(n) => format!("Save state {}", n),
             Action::LoadState(n) => format!("Load state {}", n),
-            Action::Resume => "Resume".to_string(),
-            Action::Pause => "Pause".to_string(),
             Action::Toggle(t) => match t {
                 Toggleable::Running => "Toggle running".to_string(),
                 Toggleable::DebugCpu => "Toggle cpu debug".to_string(),
@@ -32,6 +45,40 @@ impl Action {
                 Toggleable::DebugPatternTable => "Toggle patern table viewer".to_string(),
                 Toggleable::DebugNameTable => "Toggle name table viewer".to_string(),
             },
+            Action::ButtonDown { btn, p2 } => {
+                format!("{} press {}", if *p2 { "P2" } else { "P1" }, btn.name())
+            }
+            Action::ButtonUp { btn, p2 } => {
+                format!("{} release {}", if *p2 { "P2" } else { "P1" }, btn.name())
+            }
+        }
+    }
+}
+
+impl NesButton {
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            NesButton::Right => "DPAD right",
+            NesButton::Left => "DPAD left",
+            NesButton::Down => "DPAD down",
+            NesButton::Up => "DPAD up",
+            NesButton::Start => "Start",
+            NesButton::Select => "Select",
+            NesButton::B => "B",
+            NesButton::A => "A",
+        }
+    }
+
+    pub(crate) fn mask(&self) -> NesController {
+        match self {
+            NesButton::Right => NesController::RIGHT,
+            NesButton::Left => NesController::LEFT,
+            NesButton::Down => NesController::DOWN,
+            NesButton::Up => NesController::UP,
+            NesButton::Start => NesController::START,
+            NesButton::Select => NesController::SELECT,
+            NesButton::B => NesController::B,
+            NesButton::A => NesController::A,
         }
     }
 }
@@ -48,7 +95,18 @@ pub enum Toggleable {
 impl NemuApp {
     pub fn execute_action(&mut self, action: &Action) {
         match action {
-            Action::Noop => {}
+            Action::OpenRom { paused } => {
+                let path = rfd::FileDialog::new()
+                    .add_filter("NES", &["nes"])
+                    .pick_file();
+
+                if let Some(path) = path {
+                    self.execute_action(&Action::LoadRom {
+                        path,
+                        paused: *paused,
+                    });
+                }
+            }
             Action::LoadRom { path, paused } => {
                 let Ok(mut f) = std::fs::File::open(path) else {
                     Self::show_error(format!(
@@ -85,13 +143,6 @@ impl NemuApp {
                     self.emulator = state.clone();
                 }
             }
-            Action::Resume => {
-                self.paused = false;
-            }
-            Action::Pause => {
-                self.paused = true;
-                self.prev_time = None;
-            }
             Action::Toggle(t) => {
                 *match t {
                     Toggleable::Running => {
@@ -106,6 +157,18 @@ impl NemuApp {
                     Toggleable::DebugPatternTable => &mut self.debug.open_pattern_tables,
                     Toggleable::DebugNameTable => &mut self.debug.open_nametables,
                 } ^= true;
+            }
+            Action::ButtonDown { btn, p2 } => {
+                if let Some(emu) = self.emulator.as_mut() {
+                    let controller = &mut emu.controllers[if *p2 { 1 } else { 0 }];
+                    *controller |= btn.mask();
+                }
+            }
+            Action::ButtonUp { btn, p2 } => {
+                if let Some(emu) = self.emulator.as_mut() {
+                    let controller = &mut emu.controllers[if *p2 { 1 } else { 0 }];
+                    *controller -= btn.mask();
+                }
             }
         }
     }

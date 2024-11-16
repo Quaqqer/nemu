@@ -59,7 +59,7 @@ impl Emulator {
             ppu,
             cart,
             controllers,
-            controller_shifters: controller_states,
+            controller_shifters,
             ram,
         } = self;
 
@@ -70,7 +70,7 @@ impl Emulator {
                 ppu,
                 cart: cart.as_mut(),
                 controllers,
-                controller_shifters: controller_states,
+                controller_shifters,
                 ram,
             });
         }
@@ -81,7 +81,7 @@ impl Emulator {
             ppu,
             cart: cart.as_mut(),
             controllers,
-            controller_shifters: controller_states,
+            controller_shifters,
             ram,
         });
 
@@ -112,7 +112,7 @@ impl Emulator {
             ppu,
             cart,
             controllers,
-            controller_shifters: controller_states,
+            controller_shifters,
             ram,
         } = &mut emu;
 
@@ -121,7 +121,7 @@ impl Emulator {
             ppu,
             cart: cart.as_mut(),
             controllers,
-            controller_shifters: controller_states,
+            controller_shifters,
             ram,
         });
 
