@@ -15,7 +15,7 @@ mod debug;
 pub(crate) struct NemuApp {
     // Emulator stuff
     pub(crate) emulator: Option<nemu_emulator::emulator::Emulator>,
-    config: nemu_emulator::config::NemuConfig,
+    pub(crate) config: nemu_emulator::config::NemuConfig,
     pub(crate) save_states: Vec<Option<nemu_emulator::emulator::Emulator>>,
     pub(crate) paused: bool,
     tex: TextureHandle,

@@ -11,6 +11,7 @@ pub enum Action {
     SaveState(usize),
     LoadState(usize),
     Toggle(Toggleable),
+    Step,
     ButtonDown { btn: NesButton, p2: bool },
     ButtonUp { btn: NesButton, p2: bool },
 }
@@ -51,6 +52,7 @@ impl Action {
             Action::ButtonUp { btn, p2 } => {
                 format!("{} release {}", if *p2 { "P2" } else { "P1" }, btn.name())
             }
+            Action::Step => "step".to_string(),
         }
     }
 }
@@ -168,6 +170,11 @@ impl NemuApp {
                 if let Some(emu) = self.emulator.as_mut() {
                     let controller = &mut emu.controllers[if *p2 { 1 } else { 0 }];
                     *controller -= btn.mask();
+                }
+            }
+            Action::Step => {
+                if let Some(emu) = self.emulator.as_mut() {
+                    emu.step(&self.config);
                 }
             }
         }

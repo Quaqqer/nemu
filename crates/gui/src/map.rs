@@ -15,6 +15,7 @@ pub(crate) fn create_action_map() -> ActionMap {
     use eframe::egui::Key;
     HashMap::from_iter(vec![
         (Key::P, (Some(Action::Toggle(Toggleable::Running)), None)),
+        (Key::S, (Some(Action::Step), None)),
         (Key::ArrowLeft, nes_button(NesButton::Left, false)),
         (Key::ArrowRight, nes_button(NesButton::Right, false)),
         (Key::ArrowDown, nes_button(NesButton::Down, false)),

@@ -24,15 +24,17 @@ pub struct MMC3 {
 
 impl MMC3 {
     pub fn new(mirroring: Mirroring, prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
+        let n_prg_banks = (prg_rom.len() / 0x2000) as u8;
+
         Self {
             mirroring,
             prg_ram: [0; 0x2000],
-            n_prg_banks: (prg_rom.len() / 0x2000) as u8,
+            n_prg_banks,
             prg_rom,
             chr_rom,
 
             p_register: [0; 8],
-            prg_banks: [0; 4],
+            prg_banks: [0, 1, n_prg_banks - 2, n_prg_banks - 1],
             chr_banks: [0; 8],
 
             target_register: 0,
@@ -82,7 +84,7 @@ impl Cart for MMC3 {
                 self.prg_ram[addr as usize - 0x6000] = v;
             }
             0x8000..=0x9FFF => {
-                if addr % 2 == 1 {
+                if addr % 2 == 0 {
                     self.target_register = v & 0x7;
                     self.prg_bank_mode = v & 0x40 != 0;
                     self.chr_inversion = v & 0x80 != 0;
@@ -111,14 +113,14 @@ impl Cart for MMC3 {
 
                     if self.prg_bank_mode {
                         self.prg_banks[2] = self.p_register[6] & 0x3F;
-                        self.prg_banks[0] = self.n_prg_banks * 2 - 2;
+                        self.prg_banks[0] = self.n_prg_banks - 2;
                     } else {
                         self.prg_banks[0] = self.p_register[6] & 0x3F;
-                        self.prg_banks[2] = self.n_prg_banks * 2 - 2;
+                        self.prg_banks[2] = self.n_prg_banks - 2;
                     }
 
                     self.prg_banks[1] = self.p_register[7] & 0x3F;
-                    self.prg_banks[3] = self.n_prg_banks * 2 - 1;
+                    self.prg_banks[3] = self.n_prg_banks - 1;
                 }
             }
             0xA000..=0xBFFF => {
@@ -190,8 +192,8 @@ impl Cart for MMC3 {
 
         self.prg_banks[0] = 0;
         self.prg_banks[1] = 1;
-        self.prg_banks[2] = self.n_prg_banks * 2 - 2;
-        self.prg_banks[3] = self.n_prg_banks * 2 - 1;
+        self.prg_banks[2] = self.n_prg_banks - 2;
+        self.prg_banks[3] = self.n_prg_banks - 1;
     }
 
     fn box_cloned(&self) -> Box<dyn Cart> {
