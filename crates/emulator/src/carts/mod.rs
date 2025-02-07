@@ -2,11 +2,13 @@ use anyhow::{anyhow, bail, ensure, Result};
 use bitfield_struct::bitfield;
 use cnrom::CNROM;
 use mmc1::MMC1;
+use mmc3::MMC3;
 use nrom::NROM;
 use uxrom::UxROM;
 
 mod cnrom;
 mod mmc1;
+mod mmc3;
 mod nrom;
 mod uxrom;
 
@@ -202,6 +204,7 @@ fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
         1 => Box::new(MMC1::new(prg_rom, chr_rom)),
         2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
         3 => Box::new(CNROM::new(mirroring, prg_rom, chr_rom)),
+        4 => Box::new(MMC3::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
@@ -258,6 +261,7 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
         1 => Box::new(MMC1::new(prg_rom, chr_rom)),
         2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
         3 => Box::new(CNROM::new(mirroring, prg_rom, chr_rom)),
+        4 => Box::new(MMC3::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
@@ -286,4 +290,7 @@ pub trait Cart {
     fn ppu_write(&mut self, addr: u16, v: u8);
     fn reset(&mut self);
     fn box_cloned(&self) -> Box<dyn Cart>;
+    fn irq_state(&self) -> bool;
+    fn irq_clear(&mut self);
+    fn end_of_scanline(&mut self);
 }

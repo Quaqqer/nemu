@@ -63,7 +63,8 @@ impl Emulator {
             ram,
         } = self;
 
-        let did_nmi = ppu.nmi;
+        // Perform NMI interrupt every frame
+        let end_of_frame = ppu.nmi;
         if ppu.nmi && ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
             cpu.nmi_interrupt(&mut NesCpuBus {
                 apu,
@@ -76,6 +77,20 @@ impl Emulator {
         }
         ppu.nmi = false;
 
+        // Interrupt requests from carts
+        if cart.irq_state() {
+            cart.irq_clear();
+            cpu.irq(&mut NesCpuBus {
+                apu,
+                ppu,
+                cart: cart.as_mut(),
+                controllers,
+                controller_shifters,
+                ram,
+            });
+        }
+
+        // Execute cpu instructions
         let cpu_cycles = cpu.tick(&mut NesCpuBus {
             apu,
             ppu,
@@ -85,10 +100,12 @@ impl Emulator {
             ram,
         });
 
+        // Execute ppu instructions
         for _ in 0..cpu_cycles * 3 {
             ppu.cycle(cart.as_mut(), config);
         }
-        did_nmi
+
+        end_of_frame
     }
 
     pub fn display(&self) -> &Display {

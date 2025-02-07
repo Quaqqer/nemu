@@ -639,6 +639,9 @@ impl Ppu {
         if self.cycle > 340 {
             self.cycle = 0;
             self.scanline += 1;
+
+            cart.end_of_scanline();
+
             if self.scanline > 261 {
                 self.display.clear();
 

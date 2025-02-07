@@ -66,4 +66,12 @@ impl Cart for CNROM {
     fn box_cloned(&self) -> Box<dyn Cart> {
         Box::new(self.clone())
     }
+
+    fn irq_state(&self) -> bool {
+        false
+    }
+
+    fn irq_clear(&mut self) {}
+
+    fn end_of_scanline(&mut self) {}
 }

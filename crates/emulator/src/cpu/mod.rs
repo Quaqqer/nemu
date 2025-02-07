@@ -134,13 +134,13 @@ impl Cpu {
 
     fn fetch8<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u8 {
         let v = mem.read(self, self.pc);
-        self.pc += 1;
+        self.pc = self.pc.wrapping_add(1);
         v
     }
 
     fn fetch16<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u16 {
         let v = self.read_mem16(mem, self.pc);
-        self.pc += 2;
+        self.pc = self.pc.wrapping_add(2);
         v
     }
 
@@ -784,6 +784,15 @@ impl Cpu {
         self.push8(mem, self.p.bits());
         self.p |= P::INTERRUPT_DISABLE;
         self.pc = self.read_mem16(mem, 0xfffa);
+    }
+
+    pub fn irq<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
+        if !self.p.intersects(P::INTERRUPT_DISABLE) {
+            self.push16(mem, self.pc);
+            self.push8(mem, self.p.bits());
+            self.p |= P::INTERRUPT_DISABLE;
+            self.pc = self.read_mem16(mem, 0xfffe);
+        }
     }
 
     fn tas<Mem: CpuMemory>(&self, _mem: &mut Mem) {
