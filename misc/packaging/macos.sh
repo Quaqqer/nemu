@@ -14,16 +14,13 @@ mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
 
 echo "Creating icon"
-# for size in 16 32 64 128 256 512; do
-#     sips -z "$size" "$size" "$MACOS_APP_DIR/Contents/Resources"
-# done
-cp ../../../misc/logo.png "$APP_DIR/Contents/Resources/Icon.png"
+cp ../logo.png "$APP_DIR/Contents/Resources/Icon.png"
 
 echo "Compiling nemu application"
 cargo build --release
 
 echo "Copying executable"
-cp ../../../target/release/nemu-gui "$APP_DIR/Contents/MacOS/nemu"
+cp ../../target/release/nemu-gui "$APP_DIR/Contents/MacOS/nemu"
 
 echo "Copying app info"
 cp ./Info.plist "$APP_DIR/Contents/Info.plist"
