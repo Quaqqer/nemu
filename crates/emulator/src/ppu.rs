@@ -425,11 +425,11 @@ impl Ppu {
                                     if self.scanline.wrapping_sub(b0 as u16) < 8 {
                                         pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
                                             | ((((b1 as u16) & 0xFE) + 1) << 4)
-                                            | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                            | (7 - (self.scanline.wrapping_sub(b0 as u16) & 0x07));
                                     } else {
                                         pattern_lo_addr = (((b1 as u16) & 0x01) << 12)
                                             | (((b1 as u16) & 0xFE) << 4)
-                                            | ((7 - self.scanline.wrapping_sub(b0 as u16)) & 0x07);
+                                            | (7 - (self.scanline.wrapping_sub(b0 as u16) & 0x07));
                                     }
                                 } else {
                                     #[allow(clippy::collapsible_if)]
@@ -658,6 +658,8 @@ impl Ppu {
     }
 
     pub fn inspect_mem(&self, cart: &dyn Cart, addr: u16) -> u8 {
+        let addr = addr % 0x4000;
+
         macro_rules! read_nametable {
             ($n:expr, $addr:expr) => {{
                 match cart.mirroring() {
@@ -680,7 +682,7 @@ impl Ppu {
             }};
         }
 
-        match addr % 0x4000 {
+        match addr {
             // Pattern tables
             0x0000..0x2000 => cart.ppu_inspect(addr),
             // Name tables
@@ -705,6 +707,7 @@ impl Ppu {
     }
 
     fn read_mem(&self, cart: &mut dyn Cart, addr: u16) -> u8 {
+        let addr = addr % 0x4000;
         match addr {
             0x0000..0x2000 => cart.ppu_read(addr),
             _ => self.inspect_mem(cart, addr),
@@ -712,6 +715,8 @@ impl Ppu {
     }
 
     fn write_mem(&mut self, cart: &mut dyn Cart, addr: u16, v: u8) {
+        let addr = addr % 0x4000;
+
         macro_rules! write_nametable {
             ($n:expr, $addr:expr, $v: expr) => {{
                 let p = match cart.mirroring() {
@@ -735,9 +740,9 @@ impl Ppu {
             }};
         }
 
-        match addr % 0x4000 {
+        match addr {
             // Pattern tables
-            0x0000..0x2000 => cart.ppu_write(addr, v),
+            0x0000..0x2000 => cart.ppu_write(addr % 0x4000, v),
             // Name tables
             0x2000..=0x23FF => write_nametable!(0, addr - 0x2000, v),
             0x2400..=0x27FF => write_nametable!(1, addr - 0x2400, v),

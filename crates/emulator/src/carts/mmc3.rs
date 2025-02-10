@@ -4,9 +4,10 @@ use super::{Cart, Mirroring};
 pub struct MMC3 {
     mirroring: Mirroring,
     prg_ram: [u8; 0x2000],
-    n_prg_banks: u8,
     prg_rom: Vec<u8>,
+    n_prg_banks: u16,
     chr_rom: Vec<u8>,
+    n_chr_banks: u16,
 
     p_register: [u8; 8],
     prg_banks: [u8; 4],
@@ -24,17 +25,19 @@ pub struct MMC3 {
 
 impl MMC3 {
     pub fn new(mirroring: Mirroring, prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
-        let n_prg_banks = (prg_rom.len() / 0x2000) as u8;
+        let n_prg_banks = (prg_rom.len() / 0x2000) as u16;
+        let n_chr_banks = (chr_rom.len() / 0x400) as u16;
 
         Self {
             mirroring,
             prg_ram: [0; 0x2000],
-            n_prg_banks,
             prg_rom,
+            n_prg_banks,
             chr_rom,
+            n_chr_banks,
 
             p_register: [0; 8],
-            prg_banks: [0, 1, n_prg_banks - 2, n_prg_banks - 1],
+            prg_banks: [0, 1, (n_prg_banks - 2) as u8, (n_prg_banks - 1) as u8],
             chr_banks: [0; 8],
 
             target_register: 0,
@@ -49,13 +52,15 @@ impl MMC3 {
     }
 
     fn prg_addr(&self, bank: u8, addr: u16) -> usize {
-        (self.prg_banks[bank as usize] as usize * 0x2000 + (addr as usize & 0x1FFF))
-            % self.prg_rom.len()
+        let bank_offset =
+            (self.prg_banks[bank as usize] as u16 % self.n_prg_banks) as usize * 0x2000;
+        bank_offset + (addr as usize & 0x1FFF)
     }
 
     fn chr_addr(&self, bank: u8, addr: u16) -> usize {
-        (self.chr_banks[bank as usize] as usize * 0x400 + (addr as usize & 0x03FF))
-            % self.chr_rom.len()
+        let bank_offset =
+            (self.chr_banks[bank as usize] as u16 % self.n_chr_banks) as usize * 0x400;
+        bank_offset + (addr as usize & 0x3FF)
     }
 }
 
@@ -115,14 +120,14 @@ impl Cart for MMC3 {
 
                     if self.prg_bank_mode {
                         self.prg_banks[2] = self.p_register[6] & 0x3F;
-                        self.prg_banks[0] = self.n_prg_banks - 2;
+                        self.prg_banks[0] = (self.n_prg_banks - 2) as u8;
                     } else {
                         self.prg_banks[0] = self.p_register[6] & 0x3F;
-                        self.prg_banks[2] = self.n_prg_banks - 2;
+                        self.prg_banks[2] = (self.n_prg_banks - 2) as u8;
                     }
 
                     self.prg_banks[1] = self.p_register[7] & 0x3F;
-                    self.prg_banks[3] = self.n_prg_banks - 1;
+                    self.prg_banks[3] = (self.n_prg_banks - 1) as u8;
                 }
             }
             0xA000..=0xBFFF => {
@@ -168,7 +173,10 @@ impl Cart for MMC3 {
             0x1400..=0x17FF => self.chr_rom[self.chr_addr(5, addr)],
             0x1800..=0x1BFF => self.chr_rom[self.chr_addr(6, addr)],
             0x1C00..=0x1FFF => self.chr_rom[self.chr_addr(7, addr)],
-            _ => unreachable!(),
+            _ => unreachable!(
+                "Tried to inspect memory at addr {:#04x}, must be in range 0x0000..0x2000",
+                addr
+            ),
         }
     }
 
@@ -182,7 +190,10 @@ impl Cart for MMC3 {
             0x1400..=0x17FF => self.chr_addr(5, addr),
             0x1800..=0x1BFF => self.chr_addr(6, addr),
             0x1C00..=0x1FFF => self.chr_addr(7, addr),
-            _ => unreachable!(),
+            _ => unreachable!(
+                "Tried to write to addr {:#04x}, must be in range 0x0000..0x2000",
+                addr
+            ),
         };
 
         self.chr_rom[ppu_addr] = v;
@@ -194,8 +205,8 @@ impl Cart for MMC3 {
 
         self.prg_banks[0] = 0;
         self.prg_banks[1] = 1;
-        self.prg_banks[2] = self.n_prg_banks - 2;
-        self.prg_banks[3] = self.n_prg_banks - 1;
+        self.prg_banks[2] = (self.n_prg_banks - 2) as u8;
+        self.prg_banks[3] = (self.n_prg_banks - 1) as u8;
     }
 
     fn box_cloned(&self) -> Box<dyn Cart> {
