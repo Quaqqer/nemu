@@ -5,7 +5,7 @@ use bitflags::bitflags;
 use crate::cpu::op::{AddrMode, Op, OPCODE_MATRIX};
 
 /// The status register
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct P(u8);
 
 bitflags! {
@@ -24,6 +24,12 @@ bitflags! {
 impl std::fmt::Display for P {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         crate::util::fmt_bitflags_u8(self.bits(), ['n', 'o', '5', 'b', 'd', 'i', 'z', 'c'], f)
+    }
+}
+
+impl std::fmt::Debug for P {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }
 
@@ -439,7 +445,7 @@ impl Cpu {
     }
 
     fn brk<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
-        self.push16(mem, self.pc);
+        self.push16(mem, self.pc + 1);
         self.push8(mem, (self.p | P::_5 | P::B).bits());
         self.p |= P::INTERRUPT_DISABLE;
         self.pc = self.read_mem16(mem, 0xFFFE);
@@ -666,7 +672,10 @@ impl Cpu {
     }
 
     fn rti<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
-        self.p = P::from_bits(self.pop8(mem)).unwrap() | P::_5;
+        let old_p = self.p;
+        self.p = P::from_bits(self.pop8(mem)).unwrap();
+        self.p.set(P::B, old_p.intersects(P::B));
+        self.p.set(P::_5, old_p.intersects(P::_5));
         self.pc = self.pop16(mem);
     }
 

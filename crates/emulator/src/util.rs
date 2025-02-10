@@ -8,7 +8,7 @@ pub fn fmt_bitflags_u8(
     #[allow(clippy::needless_range_loop)]
     for bit_i in 0..8 {
         let c = chars[bit_i];
-        let bit = bits >> (7 - bit_i) != 0;
+        let bit = (bits << bit_i) & 0x80 != 0;
 
         f.write_char(if bit {
             c.to_uppercase().next().unwrap()
