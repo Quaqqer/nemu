@@ -254,7 +254,11 @@ impl Cpu {
             Op::Bmi => self.bmi(mem, addr),
             Op::Bne => self.bne(mem, addr),
             Op::Bpl => self.bpl(mem, addr),
-            Op::Brk => self.brk(mem),
+            Op::Brk => {
+                // BRK is a 2 byte instruction for some reason
+                self.fetch8(mem);
+                self.brk(mem);
+            }
             Op::Bvc => self.bvc(mem, addr),
             Op::Bvs => self.bvs(mem, addr),
             Op::Clc => self.clc(mem),
@@ -445,10 +449,7 @@ impl Cpu {
     }
 
     fn brk<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
-        self.push16(mem, self.pc + 1);
-        self.push8(mem, (self.p | P::_5 | P::B).bits());
-        self.p |= P::INTERRUPT_DISABLE;
-        self.pc = self.read_mem16(mem, 0xFFFE);
+        self.interrupt(mem, 0xFFFE);
     }
 
     fn bvc<Mem: CpuMemory>(&mut self, _mem: &mut Mem, a: Addr) {
@@ -789,19 +790,20 @@ impl Cpu {
     }
 
     pub fn nmi_interrupt<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
-        self.push16(mem, self.pc);
-        self.push8(mem, self.p.bits());
-        self.p |= P::INTERRUPT_DISABLE;
-        self.pc = self.read_mem16(mem, 0xfffa);
+        self.interrupt(mem, 0xFFFA);
     }
 
     pub fn irq<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
         if !self.p.intersects(P::INTERRUPT_DISABLE) {
-            self.push16(mem, self.pc);
-            self.push8(mem, self.p.bits());
-            self.p |= P::INTERRUPT_DISABLE;
-            self.pc = self.read_mem16(mem, 0xfffe);
+            self.interrupt(mem, 0xFFFE);
         }
+    }
+
+    fn interrupt<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: u16) {
+        self.push16(mem, self.pc);
+        self.push8(mem, (self.p | P::_5 | P::B).bits());
+        self.p |= P::INTERRUPT_DISABLE;
+        self.pc = self.read_mem16(mem, addr);
     }
 
     fn tas<Mem: CpuMemory>(&self, _mem: &mut Mem) {
