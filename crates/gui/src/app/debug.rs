@@ -270,11 +270,15 @@ impl NemuApp {
                 });
 
                 ui.vertical(|ui| {
-                    for palette_ram in emu.ppu.palette.chunks(4) {
-                        Self::palette_row(
-                            ui,
-                            Self::palette(palette_ram.try_into().unwrap(), &PALETTE),
-                        );
+                    for (i, palette_ram) in emu.ppu.palette.chunks(4).enumerate() {
+                        ui.push_id(i, |ui| {
+                            Self::palette_row(
+                                ui,
+                                Self::palette(palette_ram.try_into().unwrap(), &PALETTE),
+                                i as u8,
+                                &mut self.selected_palette,
+                            );
+                        });
                     }
                 });
             });
@@ -314,13 +318,15 @@ impl NemuApp {
                                 for dx in 0..8 {
                                     let px = nemu_emulator::debug::get_sprite_px(&sprite, dx, dy);
 
-                                    let (r, g, b) = match px {
-                                        0 => (0, 0, 0),
-                                        1 => (125, 0, 0),
-                                        2 => (0, 125, 0),
-                                        3 => (0, 0, 125),
-                                        _ => unreachable!(),
-                                    };
+                                    let palette = Self::palette(
+                                        &emu.ppu.palette[self.selected_palette as usize * 4
+                                            ..self.selected_palette as usize * 4 + 4]
+                                            .try_into()
+                                            .unwrap(),
+                                        &PALETTE,
+                                    );
+
+                                    let (r, g, b) = palette[px as usize];
 
                                     let base = ((row * 8 + dy) * (32 * 8) + (col * 8) + dx) * 3;
 
@@ -369,7 +375,12 @@ impl NemuApp {
         palette_row
     }
 
-    pub(crate) fn palette_row(ui: &mut Ui, colors: [(u8, u8, u8); 4]) {
+    pub(crate) fn palette_row(
+        ui: &mut Ui,
+        colors: [(u8, u8, u8); 4],
+        palette_i: u8,
+        selected_palette: &mut u8,
+    ) {
         let w = 10.;
 
         ui.horizontal(|ui| {
@@ -379,6 +390,10 @@ impl NemuApp {
                 let rounding = 0.;
 
                 ui.painter().rect_filled(rect, rounding, color);
+
+                if ui.interact(rect, ui.id(), egui::Sense::click()).clicked() {
+                    *selected_palette = palette_i;
+                }
             }
         });
     }
