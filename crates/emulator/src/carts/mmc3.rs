@@ -49,11 +49,13 @@ impl MMC3 {
     }
 
     fn prg_addr(&self, bank: u8, addr: u16) -> usize {
-        self.prg_banks[bank as usize] as usize * 0x2000 + (addr as usize & 0x1FFF)
+        (self.prg_banks[bank as usize] as usize * 0x2000 + (addr as usize & 0x1FFF))
+            % self.prg_rom.len()
     }
 
     fn chr_addr(&self, bank: u8, addr: u16) -> usize {
-        self.chr_banks[bank as usize] as usize * 0x400 + (addr as usize & 0x03FF)
+        (self.chr_banks[bank as usize] as usize * 0x400 + (addr as usize & 0x03FF))
+            % self.chr_rom.len()
     }
 }
 
