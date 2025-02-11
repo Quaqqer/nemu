@@ -10,5 +10,7 @@ pub mod debug;
 pub mod emulator;
 pub mod nes_cpu_bus;
 pub mod ppu;
-mod test;
 mod util;
+
+#[cfg(test)]
+mod test;
