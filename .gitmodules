@@ -1,6 +1,8 @@
 [submodule "crates/emulator/res/65x02"]
 	path = crates/emulator/res/single_step_tests
 	url = https://github.com/SingleStepTests/65x02.git
+	shallow = true
 [submodule "crates/emulator/res/nes-test-roms"]
 	path = crates/emulator/res/nes-test-roms
 	url = https://github.com/christopherpow/nes-test-roms.git
+	shallow = true
