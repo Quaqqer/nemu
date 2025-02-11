@@ -1,3 +1,6 @@
 [submodule "crates/emulator/res/65x02"]
 	path = crates/emulator/res/single_step_tests
 	url = git@github.com:SingleStepTests/65x02.git
+[submodule "crates/emulator/res/nes-test-roms"]
+	path = crates/emulator/res/nes-test-roms
+	url = git@github.com:christopherpow/nes-test-roms.git
