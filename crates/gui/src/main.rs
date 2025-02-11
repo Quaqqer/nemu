@@ -1,5 +1,4 @@
 #![allow(clippy::new_without_default, clippy::single_match, clippy::identity_op)]
-#![feature(let_chains)]
 
 mod action;
 mod app;

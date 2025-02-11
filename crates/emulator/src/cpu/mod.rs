@@ -89,15 +89,9 @@ impl Cpu {
     }
 
     pub fn inspect_mem16<Mem: CpuMemory>(&self, mem: &Mem, addr: u16) -> Option<u16> {
-        let l = mem.inspect(self, addr);
-        let r = mem.inspect(self, addr.wrapping_add(1));
-        if let Some(l) = l
-            && let Some(r) = r
-        {
-            Some(u16::from_le_bytes([l, r]))
-        } else {
-            None
-        }
+        let l = mem.inspect(self, addr)?;
+        let r = mem.inspect(self, addr.wrapping_add(1))?;
+        Some(u16::from_le_bytes([l, r]))
     }
 
     /// Read 16 bytes from memory, with page wrapping.
