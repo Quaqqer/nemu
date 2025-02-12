@@ -42,3 +42,5 @@ Thanks to
 - Nestest for providing a great test suite for the CPU
 - [javid9x](https://www.youtube.com/@javidx9) for videos explaining how the NES PPU works
 - The wonderful people over at [r/EmuDev](https://www.reddit.com/r/EmuDev/)'s Discord.
+- [SingleStepTests](https://github.com/SingleStepTests) for the final
+  percentages of CPU accuracy.
