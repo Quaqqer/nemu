@@ -96,7 +96,7 @@ fn run_test(sst: SingleStepTest) {
 
     // Run the instruction
     let op_str = cpu.print_op(&mem, cpu.pc);
-    cpu.tick(&mut mem);
+    let cyc = cpu.tick(&mut mem);
 
     let final_ = sst.final_;
     let final_p = cpu::P::from_bits(final_.p).unwrap();
@@ -112,7 +112,8 @@ fn run_test(sst: SingleStepTest) {
         || cpu.pc != final_.pc
         || cpu.sp != final_.s;
     let mem_differ = mem.ram != final_ram;
-    let fail = cpu_state_differ || mem_differ;
+    let cycles_differ = cyc != sst.cycles.len() as u64;
+    let fail = cpu_state_differ || mem_differ || cycles_differ;
 
     if fail {
         let fail_line = std::format!("Failed test {} with op {}", sst.name, op_str);
@@ -144,6 +145,14 @@ fn run_test(sst: SingleStepTest) {
             eprintln!("Expected: {:?}", final_ram);
         }
         eprintln!();
+
+        if cycles_differ {
+            eprintln!("Cycle count differs");
+            eprintln!("Got:      {}", cyc);
+            eprintln!("Expected: {}", sst.cycles.len());
+        }
+        eprintln!();
+
         panic!();
     }
 
