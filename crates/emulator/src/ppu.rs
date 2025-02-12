@@ -531,7 +531,16 @@ impl Ppu {
                         let at_low = ((self.bg_shift_at_low & bit_mux) != 0) as u8;
                         let at_high = ((self.bg_shift_at_high & bit_mux) != 0) as u8;
                         let pal = (at_high << 1) | at_low;
-                        (px, pal)
+
+                        let bg_disable = !self.ppumask.intersects(PpuMask::BACKGROUND_ENABLE)
+                            || ((1..=8).contains(&self.cycle)
+                                && !self.ppumask.intersects(PpuMask::BACKGROUND_LEFT_ENABLE));
+
+                        if bg_disable {
+                            (0, 0)
+                        } else {
+                            (px, pal)
+                        }
                     };
 
                     let mut sprite_0_rendered = false;
@@ -561,7 +570,15 @@ impl Ppu {
                             }
                         }
 
-                        (fg_px, fg_pal, fg_prio)
+                        let fg_disable = !self.ppumask.intersects(PpuMask::SPRITE_ENABLE)
+                            || (1..=8).contains(&self.cycle)
+                                && !self.ppumask.intersects(PpuMask::SPRITE_LEFT_ENABLE);
+
+                        if fg_disable {
+                            (0, 0, false)
+                        } else {
+                            (fg_px, fg_pal, fg_prio)
+                        }
                     };
 
                     let (px, pal) = match (bg_px, fg_px) {
@@ -571,23 +588,6 @@ impl Ppu {
                         (_, _) => {
                             // Update sprite 0 hit detection
                             if self.sprite_0_in_scanline && sprite_0_rendered {
-                                let expected_status =
-                                    PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE;
-                                let left_status =
-                                    PpuMask::BACKGROUND_LEFT_ENABLE | PpuMask::SPRITE_LEFT_ENABLE;
-
-                                if self.ppumask & expected_status == expected_status {
-                                    match self.cycle {
-                                        1..9 if self.ppumask & left_status == left_status => {
-                                            self.ppustatus |= PpuStatus::SPRITE_0_HIT;
-                                        }
-                                        9..258 => {
-                                            self.ppustatus |= PpuStatus::SPRITE_0_HIT;
-                                        }
-                                        _ => {}
-                                    }
-                                }
-
                                 self.ppustatus |= PpuStatus::SPRITE_0_HIT;
                             }
 
