@@ -103,15 +103,15 @@ impl Cart for MMC3 {
                         self.chr_banks[1] = self.p_register[3];
                         self.chr_banks[2] = self.p_register[4];
                         self.chr_banks[3] = self.p_register[5];
-                        self.chr_banks[4] = self.p_register[0] & 0xFE;
-                        self.chr_banks[5] = self.p_register[0] + 1;
-                        self.chr_banks[6] = self.p_register[1] & 0xFE;
-                        self.chr_banks[7] = self.p_register[1] + 1;
+                        self.chr_banks[4] = self.p_register[0] & !0x1;
+                        self.chr_banks[5] = self.p_register[0] | 0x1;
+                        self.chr_banks[6] = self.p_register[1] & !0x1;
+                        self.chr_banks[7] = self.p_register[1] | 0x1;
                     } else {
-                        self.chr_banks[0] = self.p_register[0] & 0xFE;
-                        self.chr_banks[1] = self.p_register[0] + 1;
-                        self.chr_banks[2] = self.p_register[1] & 0xFE;
-                        self.chr_banks[3] = self.p_register[1] + 1;
+                        self.chr_banks[0] = self.p_register[0] & !0x1;
+                        self.chr_banks[1] = self.p_register[0] | 0x1;
+                        self.chr_banks[2] = self.p_register[1] & !0x1;
+                        self.chr_banks[3] = self.p_register[1] | 0x1;
                         self.chr_banks[4] = self.p_register[2];
                         self.chr_banks[5] = self.p_register[3];
                         self.chr_banks[6] = self.p_register[4];
@@ -119,15 +119,15 @@ impl Cart for MMC3 {
                     }
 
                     if self.prg_bank_mode {
-                        self.prg_banks[2] = self.p_register[6] & 0x3F;
-                        self.prg_banks[0] = (self.n_prg_banks - 2) as u8;
+                        self.prg_banks[0] = self.n_prg_banks as u8 - 2;
+                        self.prg_banks[2] = self.p_register[6];
                     } else {
-                        self.prg_banks[0] = self.p_register[6] & 0x3F;
-                        self.prg_banks[2] = (self.n_prg_banks - 2) as u8;
+                        self.prg_banks[0] = self.p_register[6];
+                        self.prg_banks[2] = self.n_prg_banks as u8 - 2;
                     }
 
-                    self.prg_banks[1] = self.p_register[7] & 0x3F;
-                    self.prg_banks[3] = (self.n_prg_banks - 1) as u8;
+                    self.prg_banks[1] = self.p_register[7];
+                    self.prg_banks[3] = self.n_prg_banks as u8 - 1;
                 }
             }
             0xA000..=0xBFFF => {

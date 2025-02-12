@@ -355,7 +355,7 @@ impl Ppu {
     pub fn cycle(&mut self, cart: &mut dyn Cart, config: &NemuConfig) {
         match self.scanline {
             // Visible scanlines and pre-render scanline
-            0..240 | 261 => {
+            0..=239 | 261 => {
                 // Update background shifter registers
                 match self.cycle {
                     2..258 | 321..338 => {
@@ -611,7 +611,7 @@ impl Ppu {
             // Post-render scanline, idle
             240 => {}
             // Vertical blanking lines
-            241..261 => {}
+            241..=260 => {}
             // Pre-render scanline
             _ => unreachable!(),
         }
@@ -635,12 +635,19 @@ impl Ppu {
             _ => {}
         }
 
+        if self
+            .ppumask
+            .intersects(PpuMask::BACKGROUND_ENABLE | PpuMask::SPRITE_ENABLE)
+            && self.cycle == 260
+            && self.scanline < 240
+        {
+            cart.end_of_scanline();
+        }
+
         self.cycle += 1;
         if self.cycle > 340 {
             self.cycle = 0;
             self.scanline += 1;
-
-            cart.end_of_scanline();
 
             if self.scanline > 261 {
                 self.display.clear();
