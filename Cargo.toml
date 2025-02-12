@@ -2,3 +2,8 @@
 
 resolver = "2"
 members = ["crates/emulator", "crates/gui", "crates/wasm"]
+
+# Optimize dev profile for significantly faster emulation and test running
+# speeds.
+[profile.dev]
+opt-level = 1
