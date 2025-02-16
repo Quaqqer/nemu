@@ -1008,7 +1008,7 @@ pub const PALETTE: [u8; 3 * 64] = {
 
 #[cfg(test)]
 mod tests {
-    use crate::carts::read_rom;
+    use crate::carts::reader::read_rom;
 
     use super::Ppu;
 

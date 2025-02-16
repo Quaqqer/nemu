@@ -124,7 +124,7 @@ impl NemuApp {
                     return;
                 };
 
-                let cart = match nemu_emulator::carts::read_rom(&bytes) {
+                let cart = match nemu_emulator::carts::reader::read_rom(&bytes) {
                     Ok(c) => c,
                     Err(msg) => {
                         Self::show_error(format!("Failed to laod rom: {}", msg));
