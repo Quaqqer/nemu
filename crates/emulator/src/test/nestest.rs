@@ -1,7 +1,7 @@
 use crate::controller::NesController;
 use crate::nes_cpu_bus::NesCpuBus;
 use crate::{apu::Apu, ppu::Ppu};
-use crate::{carts::read_rom, cpu::Cpu};
+use crate::{carts::reader::read_rom, cpu::Cpu};
 
 #[derive(PartialEq)]
 struct LogEntry {
@@ -45,17 +45,17 @@ fn parse_log(lines: &[String]) -> Vec<LogEntry> {
 
 #[test]
 fn run_nestest() {
-    let log_lines = include_str!("../../test_roms/nestest/nestest.log")
+    let log_lines = include_str!("../../res/nes-test-roms/other/nestest.log")
         .lines()
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let cart = &mut read_rom(include_bytes!("../../test_roms/nestest/nestest.nes")).unwrap();
+    let cart = &mut read_rom(include_bytes!("../../res/nes-test-roms/other/nestest.nes")).unwrap();
     let mut cpu = Cpu::new();
     let cpu_bus = &mut NesCpuBus {
         apu: &mut Apu::new(),
         ppu: &mut Ppu::new(),
-        cart: cart.as_mut(),
+        cart,
         controllers: &[NesController::empty(); 2],
         controller_shifters: &mut [0x0; 2],
         ram: &mut [0x00; 0x800],

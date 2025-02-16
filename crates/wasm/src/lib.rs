@@ -3,7 +3,7 @@
 #![allow(unused)]
 
 use nemu_emulator::{
-    carts::read_rom, config::NemuConfig, controller::NesController, emulator::Emulator, ppu,
+    carts::reader::read_rom, config::NemuConfig, controller::NesController, emulator::Emulator, ppu,
 };
 use wasm_bindgen::prelude::*;
 
