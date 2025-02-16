@@ -1,6 +1,6 @@
-use super::{Cart, Mirroring};
+use crate::carts::{Cart, Mirroring};
 
-#[derive(Clone)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct MMC3 {
     mirroring: Mirroring,
     prg_ram: [u8; 0x2000],
@@ -65,7 +65,7 @@ impl MMC3 {
 }
 
 impl Cart for MMC3 {
-    fn mirroring(&self) -> super::Mirroring {
+    fn mirroring(&self) -> Mirroring {
         self.mirroring
     }
 
