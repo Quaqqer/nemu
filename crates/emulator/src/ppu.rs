@@ -1017,34 +1017,33 @@ mod tests {
         // Test taken from https://www.nesdev.org/wiki/PPU_scrolling#Summary
         let mut ppu = Ppu::new();
         let mut cart = read_rom(include_bytes!("../test_roms/nestest/nestest.nes")).unwrap();
-        let cart = cart.as_mut();
 
         // $2000 write
-        ppu.cpu_write_register(cart, 0x2000, 0b00000000);
+        ppu.cpu_write_register(&mut cart, 0x2000, 0b00000000);
         assert!(ppu.t.into_bits() & (0b11 << 10) == 0);
 
         // $2002 read
-        ppu.cpu_read_register(cart, 0x2002);
+        ppu.cpu_read_register(&mut cart, 0x2002);
         assert!(!ppu.latch_toggle);
 
         // $2005 write 1
-        ppu.cpu_write_register(cart, 0x2005, 0b01111101);
+        ppu.cpu_write_register(&mut cart, 0x2005, 0b01111101);
         assert!(ppu.t.into_bits() & 0b11000011111 == 0b1111);
         assert!(ppu.fine_x == 0b101);
         assert!(ppu.latch_toggle);
 
         // $2005 write 2
-        ppu.cpu_write_register(cart, 0x2005, 0b01011110);
+        ppu.cpu_write_register(&mut cart, 0x2005, 0b01011110);
         assert!(ppu.t.into_bits() == 0b01100001_01101111);
         assert!(!ppu.latch_toggle);
 
         // $2006 write 1
-        ppu.cpu_write_register(cart, 0x2006, 0b00111101);
+        ppu.cpu_write_register(&mut cart, 0x2006, 0b00111101);
         assert!(ppu.t.into_bits() == 0b00111101_01101111);
         assert!(ppu.latch_toggle);
 
         // $2006 write 2
-        ppu.cpu_write_register(cart, 0x2006, 0b11110000);
+        ppu.cpu_write_register(&mut cart, 0x2006, 0b11110000);
         assert!(ppu.t.into_bits() == 0b00111101_11110000);
         assert!(ppu.v.into_bits() == 0b00111101_11110000);
         assert!(!ppu.latch_toggle);

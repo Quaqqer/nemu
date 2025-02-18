@@ -6,7 +6,7 @@ use crate::carts::mappers::uxrom::UxROM;
 use anyhow::{anyhow, bail, ensure, Result};
 use bitfield_struct::bitfield;
 
-use super::{Cart, Mirroring};
+use super::{generic_cart::GenericCart, Mirroring};
 
 #[bitfield(u128)]
 struct INes1Header {
@@ -130,7 +130,7 @@ struct Nes2Header {
     _unused: u8,
 }
 
-pub fn read_rom(bin: &[u8]) -> Result<Box<dyn Cart>> {
+pub fn read_rom(bin: &[u8]) -> Result<GenericCart> {
     let header_bytes = u128::from_le_bytes(
         TryInto::<[u8; 16]>::try_into(&bin[0..16])
             .map_err(|_| anyhow!("Failed to read header bytes"))?,
@@ -152,7 +152,7 @@ pub fn read_rom(bin: &[u8]) -> Result<Box<dyn Cart>> {
     }
 }
 
-fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
+fn read_ines(bin: &[u8], header: INes1Header) -> Result<GenericCart> {
     let mut i = 16;
 
     let _trainer = if header.trainer() {
@@ -196,16 +196,16 @@ fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
     let mapper_number = header.mapper_number_upper() << 4 | header.mapper_number_lower();
 
     Ok(match mapper_number {
-        0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
-        1 => Box::new(MMC1::new(prg_rom, chr_rom)),
-        2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
-        3 => Box::new(CNROM::new(mirroring, prg_rom, chr_rom)),
-        4 => Box::new(MMC3::new(mirroring, prg_rom, chr_rom)),
+        0 => GenericCart::NROM(NROM::new(mirroring, prg_rom, chr_rom)),
+        1 => GenericCart::MMC1(MMC1::new(prg_rom, chr_rom)),
+        2 => GenericCart::UxROM(UxROM::new(mirroring, prg_rom, chr_rom)),
+        3 => GenericCart::CNROM(CNROM::new(mirroring, prg_rom, chr_rom)),
+        4 => GenericCart::MMC3(MMC3::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }
 
-fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
+fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<GenericCart> {
     if header.console_type() != 0 {
         bail!("This ROM is for an unsupported system");
     }
@@ -253,11 +253,11 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
         | header.mapper_number_nibble1();
 
     Ok(match mapper_number {
-        0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
-        1 => Box::new(MMC1::new(prg_rom, chr_rom)),
-        2 => Box::new(UxROM::new(mirroring, prg_rom, chr_rom)),
-        3 => Box::new(CNROM::new(mirroring, prg_rom, chr_rom)),
-        4 => Box::new(MMC3::new(mirroring, prg_rom, chr_rom)),
+        0 => GenericCart::NROM(NROM::new(mirroring, prg_rom, chr_rom)),
+        1 => GenericCart::MMC1(MMC1::new(prg_rom, chr_rom)),
+        2 => GenericCart::UxROM(UxROM::new(mirroring, prg_rom, chr_rom)),
+        3 => GenericCart::CNROM(CNROM::new(mirroring, prg_rom, chr_rom)),
+        4 => GenericCart::MMC3(MMC3::new(mirroring, prg_rom, chr_rom)),
         _ => bail!("Mapper number {} is not implemented yet", mapper_number),
     })
 }

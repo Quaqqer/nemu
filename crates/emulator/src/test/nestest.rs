@@ -55,7 +55,7 @@ fn run_nestest() {
     let cpu_bus = &mut NesCpuBus {
         apu: &mut Apu::new(),
         ppu: &mut Ppu::new(),
-        cart: cart.as_mut(),
+        cart,
         controllers: &[NesController::empty(); 2],
         controller_shifters: &mut [0x0; 2],
         ram: &mut [0x00; 0x800],
