@@ -45,12 +45,12 @@ fn parse_log(lines: &[String]) -> Vec<LogEntry> {
 
 #[test]
 fn run_nestest() {
-    let log_lines = include_str!("../../test_roms/nestest/nestest.log")
+    let log_lines = include_str!("../../res/nes-test-roms/other/nestest.log")
         .lines()
         .map(|s| s.to_string())
         .collect::<Vec<String>>();
 
-    let cart = &mut read_rom(include_bytes!("../../test_roms/nestest/nestest.nes")).unwrap();
+    let cart = &mut read_rom(include_bytes!("../../res/nes-test-roms/other/nestest.nes")).unwrap();
     let mut cpu = Cpu::new();
     let cpu_bus = &mut NesCpuBus {
         apu: &mut Apu::new(),
