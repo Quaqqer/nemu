@@ -113,7 +113,7 @@ impl Cart for MMC1 {
                     self.reg_load = 0;
                     self.n_load = 0;
                 } else {
-                    self.reg_load = (self.reg_load >> 1) | (v & 0x1) << 4;
+                    self.reg_load = (self.reg_load >> 1) | ((v & 0x1) << 4);
                     self.n_load += 1;
 
                     if self.n_load == 5 {
