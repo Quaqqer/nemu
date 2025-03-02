@@ -1,8 +1,8 @@
 use bitfield_struct::bitfield;
 
-use super::{Cart, Mirroring};
+use crate::carts::{Cart, Mirroring};
 
-#[derive(Clone)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct MMC1 {
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
@@ -18,6 +18,7 @@ pub struct MMC1 {
 }
 
 #[bitfield(u8)]
+#[derive(bincode::Encode, bincode::Decode)]
 struct MMC1Control {
     #[bits(2)]
     /// The arrangement of nametables

@@ -3,7 +3,7 @@ use bitflags::bitflags;
 
 use crate::{carts::Cart, config::NemuConfig};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, bincode::Encode, bincode::Decode)]
 pub struct PpuCtrl(u8);
 
 bitflags! {
@@ -29,7 +29,7 @@ impl std::fmt::Display for PpuCtrl {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, bincode::Encode, bincode::Decode)]
 pub struct PpuMask(u8);
 
 bitflags! {
@@ -68,6 +68,7 @@ impl std::fmt::Display for PpuMask {
 }
 
 #[bitfield(u16)]
+#[derive(bincode::Encode, bincode::Decode)]
 pub struct LoopyRegister {
     #[bits(5)]
     pub coarse_x: u8,
@@ -80,7 +81,7 @@ pub struct LoopyRegister {
     _unused: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, bincode::Encode, bincode::Decode)]
 pub struct PpuStatus(u8);
 bitflags! {
     impl PpuStatus: u8 {
@@ -102,7 +103,7 @@ impl std::fmt::Display for PpuStatus {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct Ppu {
     // Registers
     pub ppuctrl: PpuCtrl,
@@ -952,7 +953,7 @@ impl Ppu {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct Display {
     pub pixels: [u8; Self::WIDTH * Self::HEIGHT * 3],
 }
@@ -1008,7 +1009,7 @@ pub const PALETTE: [u8; 3 * 64] = {
 
 #[cfg(test)]
 mod tests {
-    use crate::carts::read_rom;
+    use crate::carts::reader::read_rom;
 
     use super::Ppu;
 
@@ -1016,35 +1017,34 @@ mod tests {
     fn ppu_scroll_registers() {
         // Test taken from https://www.nesdev.org/wiki/PPU_scrolling#Summary
         let mut ppu = Ppu::new();
-        let mut cart = read_rom(include_bytes!("../test_roms/nestest/nestest.nes")).unwrap();
-        let cart = cart.as_mut();
+        let mut cart = read_rom(include_bytes!("../res/nes-test-roms/other/nestest.nes")).unwrap();
 
         // $2000 write
-        ppu.cpu_write_register(cart, 0x2000, 0b00000000);
+        ppu.cpu_write_register(&mut cart, 0x2000, 0b00000000);
         assert!(ppu.t.into_bits() & (0b11 << 10) == 0);
 
         // $2002 read
-        ppu.cpu_read_register(cart, 0x2002);
+        ppu.cpu_read_register(&mut cart, 0x2002);
         assert!(!ppu.latch_toggle);
 
         // $2005 write 1
-        ppu.cpu_write_register(cart, 0x2005, 0b01111101);
+        ppu.cpu_write_register(&mut cart, 0x2005, 0b01111101);
         assert!(ppu.t.into_bits() & 0b11000011111 == 0b1111);
         assert!(ppu.fine_x == 0b101);
         assert!(ppu.latch_toggle);
 
         // $2005 write 2
-        ppu.cpu_write_register(cart, 0x2005, 0b01011110);
+        ppu.cpu_write_register(&mut cart, 0x2005, 0b01011110);
         assert!(ppu.t.into_bits() == 0b01100001_01101111);
         assert!(!ppu.latch_toggle);
 
         // $2006 write 1
-        ppu.cpu_write_register(cart, 0x2006, 0b00111101);
+        ppu.cpu_write_register(&mut cart, 0x2006, 0b00111101);
         assert!(ppu.t.into_bits() == 0b00111101_01101111);
         assert!(ppu.latch_toggle);
 
         // $2006 write 2
-        ppu.cpu_write_register(cart, 0x2006, 0b11110000);
+        ppu.cpu_write_register(&mut cart, 0x2006, 0b11110000);
         assert!(ppu.t.into_bits() == 0b00111101_11110000);
         assert!(ppu.v.into_bits() == 0b00111101_11110000);
         assert!(!ppu.latch_toggle);

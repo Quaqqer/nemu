@@ -1,29 +1,26 @@
-use super::{Cart, Mirroring};
+use crate::carts::{Cart, Mirroring};
 
-#[derive(Clone)]
-pub struct UxROM {
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
+pub struct CNROM {
     mirroring: Mirroring,
     prg_rom: Vec<u8>,
     chr_rom: Vec<u8>,
-    bank_lo: u8,
-    bank_hi: u8,
+    bank: u8,
 }
 
-impl UxROM {
+impl CNROM {
     pub fn new(mirroring: Mirroring, prg_rom: Vec<u8>, chr_rom: Vec<u8>) -> Self {
-        let bank_hi = ((prg_rom.len() / 0x4000) - 1) as u8;
-
         Self {
             mirroring,
             prg_rom,
             chr_rom,
-            bank_lo: 0,
-            bank_hi,
+            bank: 0,
         }
     }
 }
 
-impl Cart for UxROM {
+impl Cart for CNROM {
     fn mirroring(&self) -> Mirroring {
         self.mirroring
     }
@@ -35,12 +32,7 @@ impl Cart for UxROM {
     fn cpu_inspect(&self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x7FFF => 0,
-            0x8000..=0xBFFF => {
-                self.prg_rom[self.bank_lo as usize * 0x4000 + (addr as usize % 0x4000)]
-            }
-            0xC000..=0xFFFF => {
-                self.prg_rom[self.bank_hi as usize * 0x4000 + (addr as usize % 0x4000)]
-            }
+            0x8000..=0xFFFF => self.prg_rom[(addr as usize - 0x8000) % self.prg_rom.len()],
         }
     }
 
@@ -48,7 +40,7 @@ impl Cart for UxROM {
         match addr {
             0x0000..=0x7FFF => {}
             0x8000..=0xFFFF => {
-                self.bank_lo = v & 0x0F;
+                self.bank = v & 0x03;
             }
         }
     }
@@ -58,20 +50,17 @@ impl Cart for UxROM {
     }
 
     fn ppu_inspect(&self, addr: u16) -> u8 {
-        let i = addr as usize % self.chr_rom.len();
+        let i = self.bank as usize * 0x2000 + addr as usize % self.chr_rom.len();
         self.chr_rom[i]
     }
 
     fn ppu_write(&mut self, addr: u16, v: u8) {
-        let i = addr as usize % self.chr_rom.len();
+        let i = self.bank as usize * 0x2000 + addr as usize % self.chr_rom.len();
         self.chr_rom[i] = v;
     }
 
     fn reset(&mut self) {
-        let bank_hi = ((self.prg_rom.len() / 0x4000) - 1) as u8;
-
-        self.bank_lo = 0;
-        self.bank_hi = bank_hi;
+        self.bank = 0;
     }
 
     fn box_cloned(&self) -> Box<dyn Cart> {

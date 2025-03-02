@@ -1,8 +1,26 @@
 use std::{io::Read, path::PathBuf};
 
+use directories::ProjectDirs;
 use nemu_emulator::controller::NesController;
 
-use crate::app::NemuApp;
+use crate::app::{NemuApp, SAVE_STATES};
+
+fn project_dirs() -> ProjectDirs {
+    ProjectDirs::from("com", "quaqqer", "Nemu").unwrap()
+}
+
+fn save_state_dir() -> PathBuf {
+    let pd = project_dirs();
+    let mut dir = pd.data_dir().to_path_buf();
+    dir.push("states");
+    dir
+}
+
+fn save_state_path(rom_name: &str, i: usize) -> PathBuf {
+    let mut dir = save_state_dir();
+    dir.push(format!("{}.{}.nemu_state", rom_name, i));
+    dir
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -110,6 +128,20 @@ impl NemuApp {
                 }
             }
             Action::LoadRom { path, paused } => {
+                // Set rom name
+                self.rom_name = Some(path.file_name().unwrap().to_str().unwrap().to_string());
+
+                for i in 0..SAVE_STATES {
+                    let ss = save_state_path(self.rom_name.as_ref().unwrap(), i);
+                    if let Ok(f) = std::fs::File::open(ss).as_mut() {
+                        let state = bincode::decode_from_std_read(f, bincode::config::standard());
+                        match state {
+                            Ok(state) => self.save_states[i] = Some(state),
+                            Err(e) => eprintln!("Failed to load save state {}: {}", i, e),
+                        }
+                    };
+                }
+
                 let Ok(mut f) = std::fs::File::open(path) else {
                     Self::show_error(format!(
                         "Could not open file '{}'",
@@ -124,7 +156,7 @@ impl NemuApp {
                     return;
                 };
 
-                let cart = match nemu_emulator::carts::read_rom(&bytes) {
+                let cart = match nemu_emulator::carts::reader::read_rom(&bytes) {
                     Ok(c) => c,
                     Err(msg) => {
                         Self::show_error(format!("Failed to laod rom: {}", msg));
@@ -134,10 +166,24 @@ impl NemuApp {
 
                 self.emulator = Some(nemu_emulator::emulator::Emulator::new(cart));
                 self.paused = *paused;
+                self.prev_time = None;
             }
             Action::SaveState(slot) => {
                 if let Some(state) = self.save_states.get_mut(*slot) {
                     *state = self.emulator.clone();
+
+                    if let Some(emu) = &self.emulator {
+                        let rom_name = self.rom_name.as_ref().unwrap();
+
+                        // Write to file
+                        std::fs::create_dir_all(save_state_dir()).unwrap();
+                        // Remove file if it already exists
+                        let f_path = save_state_path(rom_name, *slot);
+                        let _ = std::fs::remove_file(&f_path);
+                        let mut f = std::fs::File::create_new(f_path).unwrap();
+                        bincode::encode_into_std_write(emu, &mut f, bincode::config::standard())
+                            .unwrap();
+                    }
                 }
             }
             Action::LoadState(slot) => {

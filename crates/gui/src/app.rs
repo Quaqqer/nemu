@@ -10,11 +10,14 @@ use crate::{
     map::{create_action_map, ActionMap},
 };
 
+pub const SAVE_STATES: usize = 10;
+
 mod debug;
 
 pub(crate) struct NemuApp {
     // Emulator stuff
     pub(crate) emulator: Option<nemu_emulator::emulator::Emulator>,
+    pub(crate) rom_name: Option<String>,
     pub(crate) config: nemu_emulator::config::NemuConfig,
     pub(crate) save_states: Vec<Option<nemu_emulator::emulator::Emulator>>,
     pub(crate) paused: bool,
@@ -54,8 +57,9 @@ impl NemuApp {
 
         Self {
             emulator: None,
+            rom_name: None,
             config: Default::default(),
-            save_states: vec![None; 10],
+            save_states: vec![None; SAVE_STATES],
             paused: false,
             tex,
             debug: NemuAppDebug {
@@ -106,6 +110,7 @@ impl NemuApp {
 
 impl eframe::App for NemuApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Tick and render emulator
         if let Some(emu) = self.emulator.as_mut() {
             if !self.paused {
                 let now = std::time::Instant::now();

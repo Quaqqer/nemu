@@ -45,7 +45,7 @@ impl NemuApp {
                     ram,
                 } = emu;
 
-                let cpu_bus = &mut NesCpuBus { apu, ppu, cart: cart.as_mut(), controllers, controller_shifters, ram };
+                let cpu_bus = &mut NesCpuBus { apu, ppu, cart, controllers, controller_shifters, ram };
 
                 egui::Grid::new("CPU Debug Grid").show(ui, |ui| {
                     ui.label("PC");
@@ -216,7 +216,7 @@ impl NemuApp {
                     for tile_x in 0..16 {
                         for tile_y in 0..16 {
                             let sprite = nemu_emulator::debug::get_sprite(
-                                emu.cart.as_ref(),
+                                &emu.cart,
                                 pattern_table,
                                 tile_x,
                                 tile_y,
@@ -300,19 +300,11 @@ impl NemuApp {
                     let mut buf: [u8; 30 * 32 * 8 * 8 * 3] = [0; 184320];
                     for row in 0..30 {
                         for col in 0..32 {
-                            let nt_entry = nemu_emulator::debug::get_nametable_entry(
-                                ppu,
-                                cart.as_ref(),
-                                nt,
-                                col,
-                                row,
-                            );
+                            let nt_entry =
+                                nemu_emulator::debug::get_nametable_entry(ppu, cart, nt, col, row);
 
-                            let sprite = nemu_emulator::debug::get_sprite_i(
-                                cart.as_ref(),
-                                0,
-                                nt_entry as usize,
-                            );
+                            let sprite =
+                                nemu_emulator::debug::get_sprite_i(cart, 0, nt_entry as usize);
 
                             for dy in 0..8 {
                                 for dx in 0..8 {

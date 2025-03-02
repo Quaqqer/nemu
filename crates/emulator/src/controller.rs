@@ -1,8 +1,10 @@
 use bitflags::bitflags;
 
+#[derive(Clone, Copy, bincode::Encode, bincode::Decode)]
+pub struct NesController(u8);
+
 bitflags! {
-    #[derive(Clone, Copy)]
-    pub struct NesController: u8 {
+    impl NesController: u8 {
         const RIGHT = 0x1;
         const LEFT = 0x2;
         const DOWN = 0x4;

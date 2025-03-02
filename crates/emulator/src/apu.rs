@@ -1,4 +1,4 @@
-#[derive(Clone)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct Apu {
     registers: [u8; 0x18],
 }

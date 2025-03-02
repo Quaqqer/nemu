@@ -1,6 +1,6 @@
 use crate::{
     apu::Apu,
-    carts::Cart,
+    carts::{generic_cart::GenericCart, Cart},
     config::NemuConfig,
     controller::NesController,
     cpu::Cpu,
@@ -8,28 +8,15 @@ use crate::{
     ppu::{Display, Ppu, PpuCtrl},
 };
 
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct Emulator {
     pub cpu: Cpu,
     pub apu: Apu,
     pub ppu: Ppu,
-    pub cart: Box<dyn Cart>,
+    pub cart: GenericCart,
     pub controllers: [NesController; 2],
     pub controller_shifters: [u8; 2],
     pub ram: [u8; 0x800],
-}
-
-impl Clone for Emulator {
-    fn clone(&self) -> Self {
-        Self {
-            cpu: self.cpu.clone(),
-            apu: self.apu.clone(),
-            ppu: self.ppu.clone(),
-            cart: self.cart.box_cloned(),
-            controllers: self.controllers,
-            controller_shifters: self.controller_shifters,
-            ram: self.ram,
-        }
-    }
 }
 
 impl Emulator {
@@ -69,7 +56,7 @@ impl Emulator {
             cpu.nmi_interrupt(&mut NesCpuBus {
                 apu,
                 ppu,
-                cart: cart.as_mut(),
+                cart,
                 controllers,
                 controller_shifters,
                 ram,
@@ -83,7 +70,7 @@ impl Emulator {
             cpu.irq(&mut NesCpuBus {
                 apu,
                 ppu,
-                cart: cart.as_mut(),
+                cart,
                 controllers,
                 controller_shifters,
                 ram,
@@ -94,7 +81,7 @@ impl Emulator {
         let cpu_cycles = cpu.tick(&mut NesCpuBus {
             apu,
             ppu,
-            cart: cart.as_mut(),
+            cart,
             controllers,
             controller_shifters,
             ram,
@@ -102,7 +89,7 @@ impl Emulator {
 
         // Execute ppu instructions
         for _ in 0..cpu_cycles * 3 {
-            ppu.cycle(cart.as_mut(), config);
+            ppu.cycle(cart, config);
         }
 
         end_of_frame
@@ -112,7 +99,7 @@ impl Emulator {
         self.ppu.display()
     }
 
-    pub fn new(cart: Box<dyn Cart>) -> Self {
+    pub fn new(cart: GenericCart) -> Self {
         let mut emu = Self {
             cpu: Cpu::new(),
             apu: Apu::new(),
@@ -136,7 +123,7 @@ impl Emulator {
         cpu.init(&mut NesCpuBus {
             apu,
             ppu,
-            cart: cart.as_mut(),
+            cart,
             controllers,
             controller_shifters,
             ram,

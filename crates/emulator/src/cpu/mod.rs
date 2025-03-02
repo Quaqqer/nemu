@@ -5,7 +5,7 @@ use bitflags::bitflags;
 use crate::cpu::op::{AddrMode, Op, OPCODE_MATRIX};
 
 /// The status register
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, bincode::Encode, bincode::Decode)]
 pub struct P(u8);
 
 bitflags! {
@@ -33,7 +33,7 @@ impl std::fmt::Debug for P {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct Cpu {
     pub a: u8,
     pub x: u8,
