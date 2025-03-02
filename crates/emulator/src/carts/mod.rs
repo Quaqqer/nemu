@@ -197,7 +197,7 @@ fn read_ines(bin: &[u8], header: INes1Header) -> Result<Box<dyn Cart>> {
         false => Mirroring::Vertical,
     };
 
-    let mapper_number = header.mapper_number_upper() << 4 | header.mapper_number_lower();
+    let mapper_number = (header.mapper_number_upper() << 4) | header.mapper_number_lower();
 
     Ok(match mapper_number {
         0 => Box::new(NROM::new(mirroring, prg_rom, chr_rom)),
@@ -228,7 +228,7 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
     };
 
     let prg_rom_size =
-        ((header.prg_rom_msb() as usize) << 4 | header.prg_rom_lsb() as usize) * 0x4000;
+        (((header.prg_rom_msb() as usize) << 4) | header.prg_rom_lsb() as usize) * 0x4000;
     let prg_rom = Vec::from(
         bin.get(i..i + prg_rom_size)
             .ok_or_else(|| anyhow!("Failed to read prg rom bytes"))?,
@@ -236,7 +236,7 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
     i += prg_rom_size;
 
     let chr_rom_size =
-        ((header.chr_rom_msb() as usize) << 4 | header.chr_rom_lsb() as usize) * 0x2000;
+        (((header.chr_rom_msb() as usize) << 4) | header.chr_rom_lsb() as usize) * 0x2000;
     let chr_rom = if chr_rom_size == 0 {
         vec![0x00; 0x2000]
     } else {
@@ -252,8 +252,8 @@ fn read_nes2(bin: &[u8], header: Nes2Header) -> Result<Box<dyn Cart>> {
         false => Mirroring::Vertical,
     };
 
-    let mapper_number = header.mapper_number_nibble3() << 8
-        | header.mapper_number_nibble2() << 4
+    let mapper_number = (header.mapper_number_nibble3() << 8)
+        | (header.mapper_number_nibble2() << 4)
         | header.mapper_number_nibble1();
 
     Ok(match mapper_number {

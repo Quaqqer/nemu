@@ -819,9 +819,9 @@ impl Ppu {
 
     fn fetch_at(&mut self, cart: &mut dyn Cart) -> u8 {
         let attr_addr: u16 = 0x23C0
-            | (self.v.nametable() as u16) << 10
-            | (self.v.coarse_y() as u16 & 0b1_1100) << 1
-            | (self.v.coarse_x() as u16 & 0b1_1100) >> 2;
+            | ((self.v.nametable() as u16) << 10)
+            | ((self.v.coarse_y() as u16 & 0b1_1100) << 1)
+            | ((self.v.coarse_x() as u16 & 0b1_1100) >> 2);
         let mut attr = self.read_mem(cart, attr_addr);
         if self.v.coarse_y() & 0x02 != 0 {
             attr >>= 4;
@@ -836,8 +836,8 @@ impl Ppu {
     fn fetch_pt_low(&mut self, cart: &mut dyn Cart) -> u8 {
         self.read_mem(
             cart,
-            (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
-                | (self.bg_next_nt as u16) << 4
+            ((self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12)
+                | ((self.bg_next_nt as u16) << 4)
                 | (self.v.fine_y() as u16 + 0),
         )
     }
@@ -845,8 +845,8 @@ impl Ppu {
     fn fetch_pt_high(&mut self, cart: &mut dyn Cart) -> u8 {
         self.read_mem(
             cart,
-            (self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12
-                | (self.bg_next_nt as u16) << 4
+            ((self.ppuctrl.intersects(PpuCtrl::BACKGROUND_TILE) as u16) << 12)
+                | ((self.bg_next_nt as u16) << 4)
                 | (self.v.fine_y() as u16 + 8),
         )
     }
