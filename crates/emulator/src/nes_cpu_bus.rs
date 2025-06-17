@@ -64,10 +64,9 @@ impl CpuMemory for NesCpuBus<'_> {
                 // Inaccuracy: Either 513 or 514 depending if on a put or write
                 // cycle, hard to implement, so we always increment with 514
                 cpu.cyc += 513;
-                let mut mem_i = (val as u16) << 8;
-                for i in 0..256 {
-                    self.ppu.oam[i] = self.read(cpu, mem_i);
-                    mem_i += 1;
+                let mem_start = (val as u16) << 8;
+                for i in 0_u16..256 {
+                    self.ppu.oam[i as usize] = self.read(cpu, mem_start + i);
                 }
             }
             0x4000..=0x4015 => {

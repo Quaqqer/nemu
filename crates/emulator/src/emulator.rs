@@ -32,14 +32,7 @@ impl Emulator {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.cpu.reset();
-        self.apu.reset();
-        self.ppu.reset();
-        self.cart.reset();
-    }
-
-    pub fn step(&mut self, config: &NemuConfig) -> bool {
+    fn cpu_and_bus<'a>(&'a mut self) -> (&'a mut Cpu, NesCpuBus<'a>) {
         let Emulator {
             cpu,
             apu,
@@ -50,46 +43,50 @@ impl Emulator {
             ram,
         } = self;
 
-        // Perform NMI interrupt every frame
-        let end_of_frame = ppu.nmi;
-        if ppu.nmi && ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
-            cpu.nmi_interrupt(&mut NesCpuBus {
+        (
+            cpu,
+            NesCpuBus {
+                ram,
                 apu,
                 ppu,
                 cart,
                 controllers,
                 controller_shifters,
-                ram,
-            });
+            },
+        )
+    }
+
+    pub fn reset(&mut self) {
+        let (cpu, mut bus) = self.cpu_and_bus();
+        cpu.reset(&mut bus);
+        self.apu.reset();
+        self.ppu.reset();
+        self.cart.reset();
+    }
+
+    pub fn step(&mut self, config: &NemuConfig) -> bool {
+        // Perform NMI interrupt every frame
+        let end_of_frame = self.ppu.nmi;
+        if self.ppu.nmi && self.ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
+            let (cpu, mut bus) = self.cpu_and_bus();
+            cpu.nmi_interrupt(&mut bus);
         }
-        ppu.nmi = false;
+        self.ppu.nmi = false;
 
         // Interrupt requests from carts
-        if cart.irq_state() {
-            cart.irq_clear();
-            cpu.irq(&mut NesCpuBus {
-                apu,
-                ppu,
-                cart,
-                controllers,
-                controller_shifters,
-                ram,
-            });
+        if self.cart.irq_state() {
+            self.cart.irq_clear();
+            let (cpu, mut bus) = self.cpu_and_bus();
+            cpu.irq(&mut bus);
         }
 
         // Execute cpu instructions
-        let cpu_cycles = cpu.tick(&mut NesCpuBus {
-            apu,
-            ppu,
-            cart,
-            controllers,
-            controller_shifters,
-            ram,
-        });
+        let (cpu, mut bus) = self.cpu_and_bus();
+        let cpu_cycles = cpu.tick(&mut bus);
 
         // Execute ppu instructions
         for _ in 0..cpu_cycles * 3 {
-            ppu.cycle(cart, config);
+            self.ppu.cycle(&mut self.cart, config);
         }
 
         end_of_frame
@@ -110,24 +107,8 @@ impl Emulator {
             ram: [0x00; 0x800],
         };
 
-        let Emulator {
-            cpu,
-            apu,
-            ppu,
-            cart,
-            controllers,
-            controller_shifters,
-            ram,
-        } = &mut emu;
-
-        cpu.init(&mut NesCpuBus {
-            apu,
-            ppu,
-            cart,
-            controllers,
-            controller_shifters,
-            ram,
-        });
+        let (cpu, mut bus) = emu.cpu_and_bus();
+        cpu.init(&mut bus);
 
         emu
     }

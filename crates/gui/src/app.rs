@@ -207,6 +207,10 @@ impl NemuApp {
                     self.execute_action(&Action::Toggle(Toggleable::Running));
                 }
 
+                if ui.button("Reset").clicked() {
+                    self.execute_action(&Action::Reset);
+                }
+
                 ui.menu_button("Save state", |ui| {
                     for i in 0..self.save_states.len() {
                         if ui

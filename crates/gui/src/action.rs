@@ -32,6 +32,7 @@ pub enum Action {
     Step,
     ButtonDown { btn: NesButton, p2: bool },
     ButtonUp { btn: NesButton, p2: bool },
+    Reset,
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
@@ -71,6 +72,7 @@ impl Action {
                 format!("{} release {}", if *p2 { "P2" } else { "P1" }, btn.name())
             }
             Action::Step => "step".to_string(),
+            Action::Reset => "reset".to_string(),
         }
     }
 }
@@ -221,6 +223,11 @@ impl NemuApp {
             Action::Step => {
                 if let Some(emu) = self.emulator.as_mut() {
                     emu.step(&self.config);
+                }
+            }
+            Action::Reset => {
+                if let Some(emu) = self.emulator.as_mut() {
+                    emu.reset();
                 }
             }
         }

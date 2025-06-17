@@ -1,4 +1,9 @@
-#![allow(clippy::new_without_default, clippy::single_match, clippy::identity_op)]
+#![allow(
+    clippy::new_without_default,
+    clippy::single_match,
+    clippy::identity_op,
+    clippy::manual_is_multiple_of
+)]
 
 pub mod apu;
 pub mod carts;
