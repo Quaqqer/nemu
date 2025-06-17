@@ -111,9 +111,10 @@ impl Cpu {
         self.pc = start_addr;
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub(crate) fn reset<Mem: CpuMemory>(&mut self, mem: &mut Mem) {
         self.sp = self.sp.wrapping_sub(3);
         self.p |= P::INTERRUPT_DISABLE;
+        self.pc = self.read_mem16(mem, 0xFFFC);
     }
 
     pub fn new() -> Self {

@@ -349,7 +349,7 @@ impl Ppu {
         self.ppumask = PpuMask::empty();
         self.t = LoopyRegister::from_bits(0x0000);
         self.latch_toggle = false;
-
+        self.ppudata_read = 0x00;
         self.odd = false;
     }
 
