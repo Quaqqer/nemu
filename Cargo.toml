@@ -1,7 +1,7 @@
 [workspace]
 
 resolver = "2"
-members = ["crates/emulator", "crates/gui", "crates/wasm"]
+members = ["crates/emulator", "crates/gui", "crates/libretro-core", "crates/wasm"]
 
 # Optimize emulator for faster tests
 [profile.dev.package.nemu-emulator]

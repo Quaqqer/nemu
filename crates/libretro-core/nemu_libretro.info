@@ -1,0 +1,15 @@
+# Software Information
+display_name = "Nintendo - NES (Nemu)"
+authors = "E. Särnhammar (aka Quaqqer)"
+supported_extensions = "nes"
+corename = "Nemu"
+categories = "Emulator"
+
+# Hardware Information
+manufacturer = "Nintendo"
+systemanem = "Nintendo Entertainment System"
+systemid = "nes"
+
+is_experimental = "true"
+
+description = "A Nes emulator written in Rust by Quaqqer."

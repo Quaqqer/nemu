@@ -1,6 +1,6 @@
 use bitflags::bitflags;
 
-#[derive(Clone, Copy, bincode::Encode, bincode::Decode)]
+#[derive(Clone, Copy, bincode::Encode, bincode::Decode, Debug)]
 pub struct NesController(u8);
 
 bitflags! {
