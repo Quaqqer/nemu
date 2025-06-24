@@ -1,4 +1,3 @@
-use debug::NemuAppDebug;
 use eframe::egui::{
     self, load::SizedTexture, Color32, ColorImage, FontDefinitions, TextureHandle, TextureOptions,
     Ui,
@@ -12,8 +11,6 @@ use crate::{
 
 pub const SAVE_STATES: usize = 10;
 
-mod debug;
-
 pub(crate) struct NemuApp {
     // Emulator stuff
     pub(crate) emulator: Option<nemu_emulator::emulator::Emulator>,
@@ -22,8 +19,6 @@ pub(crate) struct NemuApp {
     pub(crate) save_states: Vec<Option<nemu_emulator::emulator::Emulator>>,
     pub(crate) paused: bool,
     tex: TextureHandle,
-
-    pub(crate) debug: NemuAppDebug,
 
     selected_palette: u8,
 
@@ -62,19 +57,6 @@ impl NemuApp {
             save_states: vec![None; SAVE_STATES],
             paused: false,
             tex,
-            debug: NemuAppDebug {
-                open_cpu: false,
-                open_ppu: false,
-                open_pattern_tables: false,
-                open_nametables: false,
-
-                pt1,
-                pt2,
-                nt1,
-                nt2,
-                nt3,
-                nt4,
-            },
 
             selected_palette: 0,
 
@@ -151,11 +133,6 @@ impl eframe::App for NemuApp {
                 });
             });
         });
-
-        self.cpu_debug_window(ctx);
-        self.ppu_debug_window(ctx);
-        self.pattern_tables_window(ctx);
-        self.nametable_window(ctx);
 
         // Always repaint
         ctx.request_repaint();
@@ -236,20 +213,7 @@ impl NemuApp {
                 });
             });
 
-            ui.menu_button("Debug", |ui| {
-                if ui.button("CPU").clicked() {
-                    self.execute_action(&Action::Toggle(Toggleable::DebugCpu));
-                };
-                if ui.button("PPU").clicked() {
-                    self.execute_action(&Action::Toggle(Toggleable::DebugPpu));
-                };
-                if ui.button("Pattern tables").clicked() {
-                    self.execute_action(&Action::Toggle(Toggleable::DebugPatternTable));
-                };
-                if ui.button("Nametables").clicked() {
-                    self.execute_action(&Action::Toggle(Toggleable::DebugNameTable));
-                };
-            });
+            ui.menu_button("Debug", |ui| {});
         });
     }
 

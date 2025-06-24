@@ -1,16 +1,20 @@
+use std::time::Duration;
+
+use chips::Ricoh6502;
+
 use crate::{
     apu::Apu,
     carts::{generic_cart::GenericCart, Cart},
     config::NemuConfig,
     controller::NesController,
-    cpu::Cpu,
+    cpu::{self, CpuMemory},
     nes_cpu_bus::NesCpuBus,
     ppu::{Display, Ppu, PpuCtrl},
 };
 
-#[derive(Clone, bincode::Encode, bincode::Decode)]
+#[derive(Clone)]
 pub struct Emulator {
-    pub cpu: Cpu,
+    pub cpu: Ricoh6502,
     pub apu: Apu,
     pub ppu: Ppu,
     pub cart: GenericCart,
@@ -33,10 +37,11 @@ impl Emulator {
     }
 
     pub fn reset(&mut self) {
-        self.cpu.reset();
+        // self.cpu.reset();
         self.apu.reset();
         self.ppu.reset();
         self.cart.reset();
+        todo!();
     }
 
     pub fn step(&mut self, config: &NemuConfig) -> bool {
@@ -50,45 +55,50 @@ impl Emulator {
             ram,
         } = self;
 
+        cpu.set_nmi(false);
+        cpu.set_irq(false);
+
         // Perform NMI interrupt every frame
         let end_of_frame = ppu.nmi;
         if ppu.nmi && ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
-            cpu.nmi_interrupt(&mut NesCpuBus {
-                apu,
-                ppu,
-                cart,
-                controllers,
-                controller_shifters,
-                ram,
-            });
+            cpu.set_nmi(true);
         }
         ppu.nmi = false;
 
         // Interrupt requests from carts
         if cart.irq_state() {
-            cart.irq_clear();
-            cpu.irq(&mut NesCpuBus {
+            cpu.set_irq(true);
+        }
+
+        // Execute cpu instructions
+        let mut cycles = 0;
+        let addr = cpu.address_bus();
+        {
+            let mut bus = NesCpuBus {
+                ram,
                 apu,
                 ppu,
                 cart,
                 controllers,
                 controller_shifters,
-                ram,
-            });
+            };
+            if cpu.is_reading() {
+                // println!("Read {}", addr);
+                cpu.set_data_bus(bus.read(addr));
+            } else {
+                // println!("Write {} to {}", cpu.data_bus(), addr);
+                if addr == 0x4014 {
+                    cycles += 513;
+                }
+                bus.write(addr, cpu.data_bus());
+            }
         }
 
-        // Execute cpu instructions
-        let cpu_cycles = cpu.tick(&mut NesCpuBus {
-            apu,
-            ppu,
-            cart,
-            controllers,
-            controller_shifters,
-            ram,
-        });
+        cpu.step();
+        cycles += 1;
 
         // Execute ppu instructions
-        for _ in 0..cpu_cycles * 3 {
+        for _ in 0..cycles * 3 {
             ppu.cycle(cart, config);
         }
 
@@ -100,35 +110,14 @@ impl Emulator {
     }
 
     pub fn new(cart: GenericCart) -> Self {
-        let mut emu = Self {
-            cpu: Cpu::new(),
+        Self {
+            cpu: Ricoh6502::new(),
             apu: Apu::new(),
             ppu: Ppu::new(),
             cart,
             controllers: [NesController::empty(); 2],
             controller_shifters: [0x0; 2],
             ram: [0x00; 0x800],
-        };
-
-        let Emulator {
-            cpu,
-            apu,
-            ppu,
-            cart,
-            controllers,
-            controller_shifters,
-            ram,
-        } = &mut emu;
-
-        cpu.init(&mut NesCpuBus {
-            apu,
-            ppu,
-            cart,
-            controllers,
-            controller_shifters,
-            ram,
-        });
-
-        emu
+        }
     }
 }

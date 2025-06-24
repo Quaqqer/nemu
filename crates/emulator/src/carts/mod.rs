@@ -26,7 +26,7 @@ pub trait Cart {
     fn ppu_write(&mut self, addr: u16, v: u8);
     fn reset(&mut self);
     fn box_cloned(&self) -> Box<dyn Cart>;
-    fn irq_state(&self) -> bool;
+    fn irq_state(&mut self) -> bool;
     fn irq_clear(&mut self);
     fn end_of_scanline(&mut self);
 }

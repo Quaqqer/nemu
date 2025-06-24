@@ -105,7 +105,7 @@ impl Cart for GenericCart {
         }
     }
 
-    fn irq_state(&self) -> bool {
+    fn irq_state(&mut self) -> bool {
         match self {
             GenericCart::CNROM(rom) => Cart::irq_state(rom),
             GenericCart::MMC1(rom)  => Cart::irq_state(rom),

@@ -18,7 +18,7 @@ pub struct MMC3 {
     chr_inversion: bool,
 
     irq_enable: bool,
-    irq_active: bool,
+    irq_active: u8,
     irq_reload: u16,
     irq_counter: u16,
 }
@@ -45,7 +45,7 @@ impl MMC3 {
             chr_inversion: false,
 
             irq_enable: false,
-            irq_active: false,
+            irq_active: 0,
             irq_reload: 0,
             irq_counter: 0,
         }
@@ -151,7 +151,7 @@ impl Cart for MMC3 {
             0xE000..=0xFFFF => {
                 if addr % 2 == 0 {
                     self.irq_enable = false;
-                    self.irq_active = false;
+                    self.irq_active = 0;
                 } else {
                     self.irq_enable = true;
                 }
@@ -213,12 +213,13 @@ impl Cart for MMC3 {
         Box::new(self.clone())
     }
 
-    fn irq_state(&self) -> bool {
-        self.irq_active
+    fn irq_state(&mut self) -> bool {
+        self.irq_active = self.irq_active.saturating_sub(1);
+        self.irq_active != 0
     }
 
     fn irq_clear(&mut self) {
-        self.irq_active = false;
+        self.irq_active = 0;
     }
 
     fn end_of_scanline(&mut self) {
@@ -229,7 +230,7 @@ impl Cart for MMC3 {
         }
 
         if self.irq_counter == 0 && self.irq_enable {
-            self.irq_active = true;
+            self.irq_active = 10;
         }
     }
 }

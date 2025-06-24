@@ -810,6 +810,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "chips"
+version = "0.1.0"
+source = "git+https://git.sr.ht/~acqrel/retro-chips#9e7a3586f4c2798b6f61d9892cf2ec5161260e4e"
+
+[[package]]
 name = "clipboard-win"
 version = "5.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2480,6 +2485,7 @@ dependencies = [
  "bincode",
  "bitfield-struct",
  "bitflags 2.8.0",
+ "chips",
  "serde",
  "serde_json",
 ]

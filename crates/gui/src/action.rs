@@ -59,10 +59,6 @@ impl Action {
             Action::LoadState(n) => format!("Load state {}", n),
             Action::Toggle(t) => match t {
                 Toggleable::Running => "Toggle running".to_string(),
-                Toggleable::DebugCpu => "Toggle cpu debug".to_string(),
-                Toggleable::DebugPpu => "Toggle PPU debug".to_string(),
-                Toggleable::DebugPatternTable => "Toggle patern table viewer".to_string(),
-                Toggleable::DebugNameTable => "Toggle name table viewer".to_string(),
             },
             Action::ButtonDown { btn, p2 } => {
                 format!("{} press {}", if *p2 { "P2" } else { "P1" }, btn.name())
@@ -106,10 +102,6 @@ impl NesButton {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Toggleable {
     Running,
-    DebugCpu,
-    DebugPpu,
-    DebugPatternTable,
-    DebugNameTable,
 }
 
 impl NemuApp {
@@ -133,13 +125,7 @@ impl NemuApp {
 
                 for i in 0..SAVE_STATES {
                     let ss = save_state_path(self.rom_name.as_ref().unwrap(), i);
-                    if let Ok(f) = std::fs::File::open(ss).as_mut() {
-                        let state = bincode::decode_from_std_read(f, bincode::config::standard());
-                        match state {
-                            Ok(state) => self.save_states[i] = Some(state),
-                            Err(e) => eprintln!("Failed to load save state {}: {}", i, e),
-                        }
-                    };
+                    if let Ok(f) = std::fs::File::open(ss).as_mut() {};
                 }
 
                 let Ok(mut f) = std::fs::File::open(path) else {
@@ -181,8 +167,6 @@ impl NemuApp {
                         let f_path = save_state_path(rom_name, *slot);
                         let _ = std::fs::remove_file(&f_path);
                         let mut f = std::fs::File::create_new(f_path).unwrap();
-                        bincode::encode_into_std_write(emu, &mut f, bincode::config::standard())
-                            .unwrap();
                     }
                 }
             }
@@ -191,21 +175,14 @@ impl NemuApp {
                     self.emulator = state.clone();
                 }
             }
-            Action::Toggle(t) => {
-                *match t {
-                    Toggleable::Running => {
-                        self.paused = !self.paused;
-                        if self.paused {
-                            self.prev_time = None;
-                        }
-                        return;
+            Action::Toggle(t) => match t {
+                Toggleable::Running => {
+                    self.paused = !self.paused;
+                    if self.paused {
+                        self.prev_time = None;
                     }
-                    Toggleable::DebugCpu => &mut self.debug.open_cpu,
-                    Toggleable::DebugPpu => &mut self.debug.open_ppu,
-                    Toggleable::DebugPatternTable => &mut self.debug.open_pattern_tables,
-                    Toggleable::DebugNameTable => &mut self.debug.open_nametables,
-                } ^= true;
-            }
+                }
+            },
             Action::ButtonDown { btn, p2 } => {
                 if let Some(emu) = self.emulator.as_mut() {
                     let controller = &mut emu.controllers[if *p2 { 1 } else { 0 }];

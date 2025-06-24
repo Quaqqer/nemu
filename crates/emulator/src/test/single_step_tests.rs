@@ -34,15 +34,15 @@ struct SingleStepMem {
 }
 
 impl CpuMemory for SingleStepMem {
-    fn read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
+    fn read(&mut self, addr: u16) -> u8 {
         self.ram.get(&addr).copied().unwrap_or(0)
     }
 
-    fn inspect(&self, _cpu: &Cpu, addr: u16) -> Option<u8> {
+    fn inspect(&self, addr: u16) -> Option<u8> {
         Some(self.ram.get(&addr).copied().unwrap_or(0))
     }
 
-    fn write(&mut self, _cpu: &mut Cpu, addr: u16, v: u8) {
+    fn write(&mut self, addr: u16, v: u8) {
         self.ram.insert(addr, v);
     }
 }
@@ -66,7 +66,7 @@ fn run_test(sst: SingleStepTest) {
     }
     let mut mem = SingleStepMem { ram };
 
-    let (op, _, _, _) = cpu::op::OPCODE_MATRIX[mem.inspect(&cpu, cpu.pc).unwrap() as usize];
+    let (op, _, _, _) = cpu::op::OPCODE_MATRIX[mem.inspect(cpu.pc).unwrap() as usize];
 
     match op {
         Op::Ahx

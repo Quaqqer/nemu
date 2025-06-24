@@ -10,6 +10,7 @@ anyhow = "1.0.91"
 bincode = "2.0.0-rc.3"
 bitfield-struct = "0.8.0"
 bitflags = "2.5.0"
+chips.git = "https://git.sr.ht/~acqrel/retro-chips"
 
 [dev-dependencies]
 serde = { version = "1.0.217", features = ["serde_derive"] }

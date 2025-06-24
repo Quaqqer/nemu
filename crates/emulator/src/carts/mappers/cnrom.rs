@@ -67,7 +67,7 @@ impl Cart for CNROM {
         Box::new(self.clone())
     }
 
-    fn irq_state(&self) -> bool {
+    fn irq_state(&mut self) -> bool {
         false
     }
 

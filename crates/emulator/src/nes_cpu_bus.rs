@@ -16,7 +16,7 @@ pub struct NesCpuBus<'a> {
 }
 
 impl CpuMemory for NesCpuBus<'_> {
-    fn read(&mut self, _cpu: &mut Cpu, addr: u16) -> u8 {
+    fn read(&mut self, addr: u16) -> u8 {
         match addr {
             0x0000..=0x1FFF => self.ram[addr as usize % 0x800],
             0x2000..=0x3FFF => self.ppu.cpu_read_register(self.cart, addr),
@@ -38,7 +38,7 @@ impl CpuMemory for NesCpuBus<'_> {
         }
     }
 
-    fn inspect(&self, _cpu: &Cpu, addr: u16) -> Option<u8> {
+    fn inspect(&self, addr: u16) -> Option<u8> {
         match addr {
             0x0000..=0x1FFF => self.ram.get(addr as usize % 0x800).copied(),
             0x2000..=0x3FFF => None,
@@ -50,7 +50,7 @@ impl CpuMemory for NesCpuBus<'_> {
         }
     }
 
-    fn write(&mut self, cpu: &mut Cpu, addr: u16, val: u8) {
+    fn write(&mut self, addr: u16, val: u8) {
         match addr {
             0x0000..=0x1FFF => {
                 self.ram[addr as usize % 0x800] = val;
@@ -63,10 +63,9 @@ impl CpuMemory for NesCpuBus<'_> {
 
                 // Inaccuracy: Either 513 or 514 depending if on a put or write
                 // cycle, hard to implement, so we always increment with 514
-                cpu.cyc += 513;
                 let mut mem_i = (val as u16) << 8;
                 for i in 0..256 {
-                    self.ppu.oam[i] = self.read(cpu, mem_i);
+                    self.ppu.oam[i] = self.read(mem_i);
                     mem_i += 1;
                 }
             }

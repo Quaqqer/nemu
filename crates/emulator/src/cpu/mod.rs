@@ -63,11 +63,11 @@ impl std::fmt::Debug for Cpu {
 }
 
 pub trait CpuMemory {
-    fn read(&mut self, cpu: &mut Cpu, addr: u16) -> u8;
+    fn read(&mut self, addr: u16) -> u8;
 
-    fn inspect(&self, cpu: &Cpu, addr: u16) -> Option<u8>;
+    fn inspect(&self, addr: u16) -> Option<u8>;
 
-    fn write(&mut self, cpu: &mut Cpu, addr: u16, v: u8);
+    fn write(&mut self, addr: u16, v: u8);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -83,14 +83,14 @@ impl Cpu {
     pub const HISTORY_LEN: usize = 64;
 
     fn read_mem16<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: u16) -> u16 {
-        let l = mem.read(self, addr);
-        let r = mem.read(self, addr.wrapping_add(1));
+        let l = mem.read(addr);
+        let r = mem.read(addr.wrapping_add(1));
         u16::from_le_bytes([l, r])
     }
 
     pub fn inspect_mem16<Mem: CpuMemory>(&self, mem: &Mem, addr: u16) -> Option<u16> {
-        let l = mem.inspect(self, addr)?;
-        let r = mem.inspect(self, addr.wrapping_add(1))?;
+        let l = mem.inspect(addr)?;
+        let r = mem.inspect(addr.wrapping_add(1))?;
         Some(u16::from_le_bytes([l, r]))
     }
 
@@ -101,8 +101,8 @@ impl Cpu {
     ///
     /// * `addr`: The memory address
     fn read_mem16_pw<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: u16) -> u16 {
-        let l = mem.read(self, addr);
-        let r = mem.read(self, (addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
+        let l = mem.read(addr);
+        let r = mem.read((addr.wrapping_add(1) & 0xFF) | (addr & 0xFF00));
         u16::from_le_bytes([l, r])
     }
 
@@ -133,7 +133,7 @@ impl Cpu {
     }
 
     fn fetch8<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u8 {
-        let v = mem.read(self, self.pc);
+        let v = mem.read(self.pc);
         self.pc = self.pc.wrapping_add(1);
         v
     }
@@ -205,10 +205,10 @@ impl Cpu {
     fn read8<Mem: CpuMemory>(&mut self, mem: &mut Mem, addr: Addr) -> u8 {
         match addr {
             Addr::A => self.a,
-            Addr::Mem(a) => mem.read(self, a),
+            Addr::Mem(a) => mem.read(a),
             Addr::MemPC(a) => {
                 self.cyc += 1;
-                mem.read(self, a)
+                mem.read(a)
             }
             Addr::Rel(_) => unreachable!(),
         }
@@ -219,7 +219,7 @@ impl Cpu {
             Addr::A => {
                 self.a = v;
             }
-            Addr::Mem(a) | Addr::MemPC(a) => mem.write(self, a, v),
+            Addr::Mem(a) | Addr::MemPC(a) => mem.write(a, v),
             Addr::Rel(_) => unreachable!(),
         }
     }
@@ -354,7 +354,7 @@ impl Cpu {
     }
 
     fn push8<Mem: CpuMemory>(&mut self, mem: &mut Mem, v: u8) {
-        mem.write(self, 0x0100 + self.sp as u16, v);
+        mem.write(0x0100 + self.sp as u16, v);
         self.sp = self.sp.wrapping_sub(1);
     }
 
@@ -366,7 +366,7 @@ impl Cpu {
 
     fn pop8<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u8 {
         self.sp = self.sp.wrapping_add(1);
-        mem.read(self, 0x0100 + self.sp as u16)
+        mem.read(0x0100 + self.sp as u16)
     }
 
     fn pop16<Mem: CpuMemory>(&mut self, mem: &mut Mem) -> u16 {
@@ -845,11 +845,11 @@ impl Cpu {
     }
 
     pub fn print_op<Mem: CpuMemory>(&self, mem: &Mem, addr: u16) -> String {
-        let Some(opcode) = mem.inspect(self, addr) else {
+        let Some(opcode) = mem.inspect(addr) else {
             return "?".to_string();
         };
         macro_rules! read_8(($base:expr, $offset:expr) => {
-            mem.inspect(self, $base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
+            mem.inspect($base.wrapping_add($offset)).map(|v| format!("${:02x}", v)).unwrap_or("$??".to_string())
         });
 
         macro_rules! read_16(($base:expr, $offset:expr) => {
