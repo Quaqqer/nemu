@@ -8,7 +8,7 @@ use app::NemuApp;
 use eframe::egui::{self, Vec2};
 
 fn main() {
-    let icon = include_bytes!("../../../misc/logo.png");
+    let icon = include_bytes!("../res/logo.png");
     let image = image::load_from_memory(icon).expect("Failed to load icon");
 
     let native_options = eframe::NativeOptions {

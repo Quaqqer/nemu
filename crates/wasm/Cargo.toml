@@ -3,6 +3,10 @@ name = "nemu-wasm"
 version = "0.1.0"
 authors = ["Emanuel Särnhammar <emanuel@quaqqer.com>"]
 edition = "2018"
+publish = false
+description = "A NES emulator written in Rust compiled to WASM."
+repository = "https://github.com/Quaqqer/nemu"
+license-file = "LICENSE.md"
 
 [lib]
 crate-type = ["cdylib", "rlib"]

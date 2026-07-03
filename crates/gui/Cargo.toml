@@ -1,7 +1,11 @@
 [package]
 name = "nemu-gui"
+authors = ["Emanuel Särnhammar <emanuel@quaqqer.com>"]
 version = "0.1.0"
 edition = "2021"
+description = "A NES emulator GUI."
+repository = "https://github.com/Quaqqer/nemu"
+license-file = "LICENSE.md"
 
 [dependencies]
 bincode = "2.0.0-rc.3"
