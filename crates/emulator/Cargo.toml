@@ -1,9 +1,12 @@
 [package]
 name = "nemu-emulator"
+authors = ["Emanuel Särnhammar <emanuel@quaqqer.com>"]
 version = "0.1.0"
 edition = "2021"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+include = ["**/*.rs", "res/palette/2c02.pal"]
+description = "A library for NES emulation."
+repository = "https://github.com/Quaqqer/nemu"
+license-file = "LICENSE.md"
 
 [dependencies]
 anyhow = "1.0.91"
