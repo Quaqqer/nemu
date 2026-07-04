@@ -9,6 +9,7 @@ license-file = "LICENSE.md"
 
 [dependencies]
 bincode = "2.0.0-rc.3"
+cpal = "0.18.1"
 directories = "6.0.0"
 eframe = "0.35.0"
 egui_extras = "0.35.0"

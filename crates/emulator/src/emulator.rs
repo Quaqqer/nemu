@@ -64,6 +64,43 @@ impl Emulator {
         self.cart.reset();
     }
 
+    #[inline]
+    pub fn tick_cpu(&mut self) -> u64 {
+        let (cpu, mut bus) = self.cpu_and_bus();
+        cpu.tick(&mut bus)
+    }
+
+    #[inline]
+    pub fn tick_apu(&mut self) {
+        self.apu.tick();
+    }
+
+    #[inline]
+    pub fn sample_apu(&self) -> f32 {
+        self.apu.sample()
+    }
+
+    #[inline]
+    pub fn tick_ppu(&mut self, config: &NemuConfig) -> bool {
+        let nmi = self.ppu.nmi;
+
+        if nmi && self.ppu.ppuctrl.intersects(PpuCtrl::NMI_ENABLE) {
+            let (cpu, mut bus) = self.cpu_and_bus();
+            cpu.nmi_interrupt(&mut bus);
+        }
+        self.ppu.nmi = false;
+
+        if self.cart.irq_state() {
+            self.cart.irq_clear();
+            let (cpu, mut bus) = self.cpu_and_bus();
+            cpu.irq(&mut bus);
+        }
+
+        self.ppu.tick(&mut self.cart, config);
+
+        nmi
+    }
+
     pub fn step(&mut self, config: &NemuConfig) -> bool {
         // Perform NMI interrupt every frame
         let end_of_frame = self.ppu.nmi;
@@ -86,7 +123,7 @@ impl Emulator {
 
         // Execute ppu instructions
         for _ in 0..cpu_cycles * 3 {
-            self.ppu.cycle(&mut self.cart, config);
+            self.ppu.tick(&mut self.cart, config);
         }
 
         end_of_frame

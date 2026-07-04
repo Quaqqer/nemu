@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use debug::NemuAppDebug;
 use eframe::egui::{
@@ -6,9 +6,11 @@ use eframe::egui::{
     Ui, Vec2,
 };
 use egui::Id;
+use nemu_emulator::{emulator::Emulator, ppu::Display};
 
 use crate::{
     action::{Action, Toggleable},
+    audio_runner::NemuAudioRunner,
     map::{create_action_map, ActionMap},
 };
 
@@ -22,21 +24,23 @@ enum AspectRatio {
     Aspect4_3,
 }
 
+pub struct RunningState {
+    pub emulator: Arc<Mutex<Emulator>>,
+    pub runner: Option<NemuAudioRunner>,
+}
+
 pub(crate) struct NemuApp {
     // Emulator stuff
-    pub(crate) emulator: Option<nemu_emulator::emulator::Emulator>,
+    pub running_state: Option<RunningState>,
     pub(crate) rom_name: Option<String>,
-    pub(crate) config: nemu_emulator::config::NemuConfig,
+    pub(crate) config: Arc<Mutex<nemu_emulator::config::NemuConfig>>,
     pub(crate) save_states: Vec<Option<nemu_emulator::emulator::Emulator>>,
-    pub(crate) paused: bool,
-    tex: TextureHandle,
+    pub tex: TextureHandle,
 
     pub(crate) debug: NemuAppDebug,
 
     selected_palette: u8,
 
-    unused_time: f64,
-    pub(crate) prev_time: Option<std::time::Instant>,
     action_map: ActionMap,
 
     // Rendering options
@@ -67,11 +71,10 @@ impl NemuApp {
         let nt4 = empty_tex("nt1", 32 * 8, 30 * 8);
 
         Self {
-            emulator: None,
+            running_state: None,
             rom_name: None,
             config: Default::default(),
             save_states: vec![None; SAVE_STATES],
-            paused: false,
             tex,
             debug: NemuAppDebug {
                 open_cpu: false,
@@ -89,8 +92,6 @@ impl NemuApp {
 
             selected_palette: 0,
 
-            unused_time: 0.,
-            prev_time: None,
             action_map: create_action_map(),
 
             aspect_ratio: AspectRatio::Aspect4_3,
@@ -121,6 +122,16 @@ impl NemuApp {
 
         fonts
     }
+
+    pub fn update_display(tex: &mut TextureHandle, display: &Display) {
+        tex.set(
+            ColorImage::from_rgb([256, 240], &display.pixels),
+            TextureOptions {
+                magnification: egui::TextureFilter::Nearest,
+                ..Default::default()
+            },
+        );
+    }
 }
 
 impl eframe::App for NemuApp {
@@ -149,33 +160,6 @@ impl eframe::App for NemuApp {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
-        // Tick and render emulator
-        if let Some(emu) = self.emulator.as_mut() {
-            if !self.paused {
-                let now = std::time::Instant::now();
-
-                if let Some(prev_time) = self.prev_time {
-                    self.unused_time += now.duration_since(prev_time).as_secs_f64();
-                }
-
-                self.prev_time = Some(now);
-
-                while self.unused_time >= 1. / 60. {
-                    self.unused_time -= 1. / 60.;
-                    emu.step_frame(&self.config);
-                }
-            }
-
-            let frame = emu.display();
-            self.tex.set(
-                ColorImage::from_rgb([256, 240], &frame.pixels),
-                TextureOptions {
-                    magnification: egui::TextureFilter::Nearest,
-                    ..Default::default()
-                },
-            );
-        }
-
         egui::Panel::top(Id::new("Menu bar")).show(ui, |ui| self.menu_bar(ui));
 
         egui::CentralPanel::default().show(ui, |ui| {
@@ -233,7 +217,18 @@ impl NemuApp {
 
             ui.menu_button("Emulation", |ui| {
                 if ui
-                    .button(if self.paused { "Resume" } else { "Pause" })
+                    .button(
+                        if self
+                            .running_state
+                            .as_ref()
+                            .and_then(|rs| rs.runner.as_ref())
+                            .is_some()
+                        {
+                            "Pause"
+                        } else {
+                            "Resume"
+                        },
+                    )
                     .clicked()
                 {
                     self.execute_action(&Action::Toggle(Toggleable::Running));
@@ -247,7 +242,7 @@ impl NemuApp {
                     for i in 0..self.save_states.len() {
                         if ui
                             .add_enabled(
-                                self.emulator.is_some(),
+                                self.running_state.is_some(),
                                 egui::Button::new(format!("Save state {}", i + 1)),
                             )
                             .clicked()

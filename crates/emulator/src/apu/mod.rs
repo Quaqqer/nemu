@@ -1,3 +1,9 @@
+mod ch_dmc;
+mod ch_noise;
+mod ch_pulse;
+mod ch_triangle;
+mod sequencer;
+
 #[derive(Clone, bincode::Encode, bincode::Decode)]
 pub struct Apu {
     registers: [u8; 0x18],
@@ -24,5 +30,11 @@ impl Apu {
 
     pub fn read_register(&self, addr: u16) -> u8 {
         self.registers[addr as usize - 0x4000]
+    }
+
+    pub fn tick(&mut self) {}
+
+    pub fn sample(&self) -> f32 {
+        0.
     }
 }

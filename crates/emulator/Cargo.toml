@@ -13,6 +13,7 @@ anyhow = "1.0.91"
 bincode = "2.0.0-rc.3"
 bitfield-struct = "0.8.0"
 bitflags = "2.5.0"
+cpal = "0.18.1"
 
 [dev-dependencies]
 serde = { version = "1.0.217", features = ["serde_derive"] }

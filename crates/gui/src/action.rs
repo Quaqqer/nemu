@@ -1,9 +1,16 @@
-use std::{io::Read, path::PathBuf};
+use std::{
+    io::Read,
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
 
 use directories::ProjectDirs;
-use nemu_emulator::controller::NesController;
+use nemu_emulator::{controller::NesController, emulator::Emulator};
 
-use crate::app::{NemuApp, SAVE_STATES};
+use crate::{
+    app::{NemuApp, RunningState, SAVE_STATES},
+    audio_runner::NemuAudioRunner,
+};
 
 fn project_dirs() -> ProjectDirs {
     ProjectDirs::from("com", "quaqqer", "Nemu").unwrap()
@@ -29,7 +36,6 @@ pub enum Action {
     SaveState(usize),
     LoadState(usize),
     Toggle(Toggleable),
-    Step,
     ButtonDown { btn: NesButton, p2: bool },
     ButtonUp { btn: NesButton, p2: bool },
     Reset,
@@ -71,7 +77,6 @@ impl Action {
             Action::ButtonUp { btn, p2 } => {
                 format!("{} release {}", if *p2 { "P2" } else { "P1" }, btn.name())
             }
-            Action::Step => "step".to_string(),
             Action::Reset => "reset".to_string(),
         }
     }
@@ -166,15 +171,28 @@ impl NemuApp {
                     }
                 };
 
-                self.emulator = Some(nemu_emulator::emulator::Emulator::new(cart));
-                self.paused = *paused;
-                self.prev_time = None;
+                let emulator = Arc::new(Mutex::new(Emulator::new(cart)));
+                let mut tex = self.tex.clone();
+                let config = self.config.clone();
+                self.running_state = Some(RunningState {
+                    emulator: emulator.clone(),
+                    runner: if *paused {
+                        None
+                    } else {
+                        Some(NemuAudioRunner::new(emulator, config, move |display| {
+                            Self::update_display(&mut tex, &display)
+                        }))
+                    },
+                });
             }
             Action::SaveState(slot) => {
                 if let Some(state) = self.save_states.get_mut(*slot) {
-                    *state = self.emulator.clone();
+                    *state = self
+                        .running_state
+                        .as_ref()
+                        .map(|rs| rs.emulator.lock().unwrap().clone());
 
-                    if let Some(emu) = &self.emulator {
+                    if let Some(emu) = state.as_ref() {
                         let rom_name = self.rom_name.as_ref().unwrap();
 
                         // Write to file
@@ -189,16 +207,34 @@ impl NemuApp {
                 }
             }
             Action::LoadState(slot) => {
-                if let Some(state) = self.save_states.get(*slot) {
-                    self.emulator = state.clone();
+                if let Some(Some(state)) = self.save_states.get(*slot) {
+                    let emulator = Arc::new(Mutex::new(state.clone()));
+                    let mut tex = self.tex.clone();
+                    let config = self.config.clone();
+
+                    self.running_state = Some(RunningState {
+                        emulator: emulator.clone(),
+                        runner: Some(NemuAudioRunner::new(emulator, config, move |display| {
+                            Self::update_display(&mut tex, &display)
+                        })),
+                    });
                 }
             }
             Action::Toggle(t) => {
                 *match t {
                     Toggleable::Running => {
-                        self.paused = !self.paused;
-                        if self.paused {
-                            self.prev_time = None;
+                        if let Some(running_state) = self.running_state.as_mut() {
+                            if running_state.runner.is_some() {
+                                running_state.runner = None;
+                            } else {
+                                let mut tex = self.tex.clone();
+                                let config = self.config.clone();
+                                let emulator = running_state.emulator.clone();
+                                running_state.runner =
+                                    Some(NemuAudioRunner::new(emulator, config, move |d| {
+                                        Self::update_display(&mut tex, &d)
+                                    }));
+                            }
                         }
                         return;
                     }
@@ -209,24 +245,31 @@ impl NemuApp {
                 } ^= true;
             }
             Action::ButtonDown { btn, p2 } => {
-                if let Some(emu) = self.emulator.as_mut() {
+                if let Some(mut emu) = self
+                    .running_state
+                    .as_mut()
+                    .map(|rs| rs.emulator.lock().unwrap())
+                {
                     let controller = &mut emu.controllers[if *p2 { 1 } else { 0 }];
                     *controller |= btn.mask();
                 }
             }
             Action::ButtonUp { btn, p2 } => {
-                if let Some(emu) = self.emulator.as_mut() {
+                if let Some(mut emu) = self
+                    .running_state
+                    .as_mut()
+                    .map(|rs| rs.emulator.lock().unwrap())
+                {
                     let controller = &mut emu.controllers[if *p2 { 1 } else { 0 }];
                     *controller -= btn.mask();
                 }
             }
-            Action::Step => {
-                if let Some(emu) = self.emulator.as_mut() {
-                    emu.step(&self.config);
-                }
-            }
             Action::Reset => {
-                if let Some(emu) = self.emulator.as_mut() {
+                if let Some(mut emu) = self
+                    .running_state
+                    .as_mut()
+                    .map(|rs| rs.emulator.lock().unwrap())
+                {
                     emu.reset();
                 }
             }

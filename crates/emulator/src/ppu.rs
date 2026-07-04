@@ -353,7 +353,7 @@ impl Ppu {
         self.odd = false;
     }
 
-    pub fn cycle(&mut self, cart: &mut dyn Cart, config: &NemuConfig) {
+    pub fn tick(&mut self, cart: &mut dyn Cart, config: &NemuConfig) {
         match self.scanline {
             // Visible scanlines and pre-render scanline
             0..=239 | 261 => {

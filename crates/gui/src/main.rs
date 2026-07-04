@@ -2,6 +2,7 @@
 
 mod action;
 mod app;
+mod audio_runner;
 mod map;
 
 use app::NemuApp;
