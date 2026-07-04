@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use debug::NemuAppDebug;
 use eframe::egui::{
     self, load::SizedTexture, Color32, ColorImage, FontDefinitions, TextureHandle, TextureOptions,
@@ -39,7 +41,7 @@ impl NemuApp {
         let empty_tex = |name: &str, x: usize, y: usize| {
             cc.egui_ctx.load_texture(
                 name,
-                ColorImage::new([x, y], Color32::BLACK),
+                ColorImage::filled([x, y], Color32::BLACK),
                 TextureOptions {
                     magnification: egui::TextureFilter::Nearest,
                     ..Default::default()
@@ -89,7 +91,9 @@ impl NemuApp {
 
         fonts.font_data.insert(
             "Cozette".to_string(),
-            egui::FontData::from_static(include_bytes!("../res/CozetteVector.ttf")),
+            Arc::new(egui::FontData::from_static(include_bytes!(
+                "../res/CozetteVector.ttf"
+            ))),
         );
 
         fonts
@@ -109,7 +113,31 @@ impl NemuApp {
 }
 
 impl eframe::App for NemuApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        for ev in &raw_input.events {
+            match ev {
+                egui::Event::Key {
+                    key, pressed: true, ..
+                } => {
+                    if let Some((Some(action), _)) = self.action_map.get(key).cloned() {
+                        self.execute_action(&action)
+                    }
+                }
+                egui::Event::Key {
+                    key,
+                    pressed: false,
+                    ..
+                } => {
+                    if let Some((_, Some(action))) = self.action_map.get(key).cloned() {
+                        self.execute_action(&action)
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Tick and render emulator
         if let Some(emu) = self.emulator.as_mut() {
             if !self.paused {
@@ -137,10 +165,9 @@ impl eframe::App for NemuApp {
             );
         }
 
-        egui::TopBottomPanel::new(egui::panel::TopBottomSide::Top, Id::new("Menu bar"))
-            .show(ctx, |ui| self.menu_bar(ui));
+        egui::Panel::top(Id::new("Menu bar")).show(ui, |ui| self.menu_bar(ui));
 
-        egui::CentralPanel::default().show(ctx, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             ui.vertical_centered(|ui| {
                 egui::Frame::default().show(ui, |ui| {
                     let sized: SizedTexture = (&self.tex).into();
@@ -152,43 +179,19 @@ impl eframe::App for NemuApp {
             });
         });
 
-        self.cpu_debug_window(ctx);
-        self.ppu_debug_window(ctx);
-        self.pattern_tables_window(ctx);
-        self.nametable_window(ctx);
+        self.cpu_debug_window(ui);
+        self.ppu_debug_window(ui);
+        self.pattern_tables_window(ui);
+        self.nametable_window(ui);
 
         // Always repaint
-        ctx.request_repaint();
-    }
-
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        for ev in &raw_input.events {
-            match ev {
-                egui::Event::Key {
-                    key, pressed: true, ..
-                } => {
-                    if let Some((Some(action), _)) = self.action_map.get(key).cloned() {
-                        self.execute_action(&action)
-                    }
-                }
-                egui::Event::Key {
-                    key,
-                    pressed: false,
-                    ..
-                } => {
-                    if let Some((_, Some(action))) = self.action_map.get(key).cloned() {
-                        self.execute_action(&action)
-                    }
-                }
-                _ => {}
-            }
-        }
+        ui.request_repaint();
     }
 }
 
 impl NemuApp {
     fn menu_bar(&mut self, ui: &mut Ui) {
-        egui::menu::bar(ui, |ui| {
+        egui::menu::MenuBar::new().ui(ui, |ui| {
             ui.menu_button("File", |ui| {
                 if ui.button("Open").clicked() {
                     self.execute_action(&Action::OpenRom { paused: false });
