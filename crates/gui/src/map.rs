@@ -1,4 +1,4 @@
-use eframe::egui::ahash::HashMap;
+use std::collections::HashMap;
 
 use crate::action::{Action, NesButton, Toggleable};
 

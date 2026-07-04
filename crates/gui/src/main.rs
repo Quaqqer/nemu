@@ -26,7 +26,7 @@ fn main() {
     eframe::run_native(
         "Nemu",
         native_options,
-        Box::new(|cc| Box::new(NemuApp::new(cc))),
+        Box::new(|cc| Ok(Box::new(NemuApp::new(cc)))),
     )
     .expect("Shouldn't just crash?");
 }
