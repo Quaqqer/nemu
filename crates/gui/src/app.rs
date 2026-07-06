@@ -3,7 +3,7 @@ use std::sync::Arc;
 use debug::NemuAppDebug;
 use eframe::egui::{
     self, load::SizedTexture, Color32, ColorImage, FontDefinitions, TextureHandle, TextureOptions,
-    Ui,
+    Ui, Vec2,
 };
 use egui::Id;
 
@@ -15,6 +15,12 @@ use crate::{
 pub const SAVE_STATES: usize = 10;
 
 mod debug;
+
+#[derive(PartialEq)]
+enum AspectRatio {
+    Raw,
+    Aspect4_3,
+}
 
 pub(crate) struct NemuApp {
     // Emulator stuff
@@ -32,6 +38,9 @@ pub(crate) struct NemuApp {
     unused_time: f64,
     pub(crate) prev_time: Option<std::time::Instant>,
     action_map: ActionMap,
+
+    // Rendering options
+    aspect_ratio: AspectRatio,
 }
 
 impl NemuApp {
@@ -83,6 +92,8 @@ impl NemuApp {
             unused_time: 0.,
             prev_time: None,
             action_map: create_action_map(),
+
+            aspect_ratio: AspectRatio::Aspect4_3,
         }
     }
 
@@ -171,9 +182,27 @@ impl eframe::App for NemuApp {
             ui.vertical_centered(|ui| {
                 egui::Frame::default().show(ui, |ui| {
                     let sized: SizedTexture = (&self.tex).into();
-                    let img = egui::Image::from_texture(sized)
-                        .maintain_aspect_ratio(true)
-                        .shrink_to_fit();
+
+                    let img = match self.aspect_ratio {
+                        AspectRatio::Raw => egui::Image::from_texture(sized).shrink_to_fit(),
+                        AspectRatio::Aspect4_3 => {
+                            let aspect_w = 4.;
+                            let aspect_h = 3.;
+
+                            let scale = f32::min(
+                                ui.available_width() / aspect_w,
+                                ui.available_height() / aspect_h,
+                            );
+
+                            let width = scale * aspect_w;
+                            let height = scale * aspect_h;
+
+                            egui::Image::from_texture(sized)
+                                .maintain_aspect_ratio(false)
+                                .fit_to_exact_size(Vec2::new(width, height))
+                        }
+                    };
+
                     ui.add(img);
                 });
             });
@@ -256,6 +285,11 @@ impl NemuApp {
                 if ui.button("Nametables").clicked() {
                     self.execute_action(&Action::Toggle(Toggleable::DebugNameTable));
                 };
+            });
+            ui.menu_button("Graphics", |ui| {
+                ui.label("Aspect ratio");
+                ui.radio_value(&mut self.aspect_ratio, AspectRatio::Raw, "Raw");
+                ui.radio_value(&mut self.aspect_ratio, AspectRatio::Aspect4_3, "4:3");
             });
         });
     }
