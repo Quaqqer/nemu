@@ -1,5 +1,7 @@
 use bitfield_struct::bitfield;
 
+const DUTY_CYCLE_SEQUENCES: [u8; 4] = [0b0100_0000, 0b0110_0000, 0b0011_1100, 0b1001_1111];
+
 #[bitfield(u8)]
 struct Reg0 {
     #[bits(2)]
@@ -39,3 +41,5 @@ struct PulseCh {
     reg2: Reg2,
     reg3: Reg3,
 }
+
+impl PulseCh {}
