@@ -2397,7 +2397,7 @@ dependencies = [
 
 [[package]]
 name = "nemu-emulator"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bincode",
@@ -2409,7 +2409,7 @@ dependencies = [
 
 [[package]]
 name = "nemu-gui"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bincode",
  "directories",
@@ -2422,7 +2422,7 @@ dependencies = [
 
 [[package]]
 name = "nemu-wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "console_error_panic_hook",
