@@ -1,7 +1,7 @@
 [package]
 name = "nemu-emulator"
 authors = ["Emanuel Särnhammar <emanuel@quaqqer.com>"]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 include = ["**/*.rs", "res/palette/2c02.pal"]
 description = "A library for NES emulation."

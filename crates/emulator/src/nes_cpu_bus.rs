@@ -32,7 +32,8 @@ impl CpuMemory for NesCpuBus<'_> {
                 v
             }
             0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
+                // TODO: APU and I/O functionality that is normally disabled.
+                0
             }
             0x4020..=0xFFFF => self.cart.cpu_read(addr),
         }
@@ -44,7 +45,8 @@ impl CpuMemory for NesCpuBus<'_> {
             0x2000..=0x3FFF => None,
             0x4000..=0x4017 => None,
             0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
+                // TODO: APU and I/O functionality that is normally disabled.
+                None
             }
             0x4020..=0xFFFF => Some(self.cart.cpu_inspect(addr)),
         }
@@ -78,7 +80,7 @@ impl CpuMemory for NesCpuBus<'_> {
             }
             0x4017 => {}
             0x4018..=0x401F => {
-                unimplemented!("APU and I/O functionality that is normally disabled.")
+                // TODO: APU and I/O functionality that is normally disabled.
             }
             0x4020..=0xFFFF => {
                 self.cart.cpu_write(addr, val);

@@ -12,16 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
+
+
+      - uses: dtolnay/rust-toolchain@stable
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev
-          rustup toolchain install nightly --profile minimal
-          rustup default nightly
           rustup component add rustfmt
       - name: Test
         run: cargo test
@@ -32,15 +33,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev
-          rustup toolchain install nightly --profile minimal
-          rustup default nightly
-          rustup component add rustfmt
+
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Check formatting
         run: cargo fmt --all --check
 
@@ -50,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: true
 
@@ -58,8 +59,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev
-          rustup toolchain install nightly --profile minimal
-          rustup default nightly
-          rustup component add clippy
+
+      - uses: dtolnay/rust-toolchain@stable
+
       - name: Lint
         run: cargo clippy --all-targets --all-features -- -Dwarnings
